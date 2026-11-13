@@ -1,0 +1,49 @@
+# Supabase CLI project settings (supabase start / supabase db reset / supabase test db).
+project_id = "intouch"
+
+[db]
+major_version = 17
+
+# Project-wide upload limit; must cover the largest bucket cap (post-media,
+# 50 MiB). Per-bucket caps and MIME types: migration ..._storage_buckets.sql.
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+# Auth settings the OTP wrapper relies on. The API enforces the 30 s resend,
+# 5 verifies per OTP and 10-minute expiry itself; these keep Supabase Auth
+# consistent with that and act as a backstop for clients that call Auth
+# directly with the anon key.
+[auth]
+enabled = true
+enable_signup = true
+# OAuth (Google) returns to the mobile app through this deep link.
+additional_redirect_urls = ["intouch://auth-callback"]
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+otp_length = 6
+otp_expiry = 600
+max_frequency = "30s"
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = true
+max_frequency = "30s"
+
+[auth.rate_limit]
+email_sent = 30
+sms_sent = 30
+token_verifications = 30
+
+# Continue with Google. The mobile app starts the OAuth flow with Supabase
+# Auth (PKCE) and returns through the app's deep link; the first GET /me
+# afterwards creates the profile (onboarding_complete = false). Cancelling
+# consent never reaches Auth's callback, so no account is created.
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+# Native sign-in with Google ID tokens (iOS/Android SDKs) has no nonce.
+skip_nonce_check = true
