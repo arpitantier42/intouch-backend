@@ -378,6 +378,30 @@ This repository holds:
   - `DELETE /posts/{id}` — 204 for the author or a moderator, admin or owner
     of a community it was posted to; 403 for anyone else. Deleted posts
     leave the feed, Saved and Jobs.
+- likes, comments, polls, Saved and hide/mute (bearer; a post you cannot
+  see answers 404 "Post not found"):
+  - `PUT /likes` with `{"post_id"}` or `{"comment_id"}` — 200 with the like
+    and the new `like_count`; liking again changes nothing. Counts are kept
+    on the post/comment row, so Realtime subscribers see them change live.
+  - `DELETE /likes/{id}` — `id` is the like id or the liked post/comment
+    id; 204.
+  - `GET /posts/{id}/comments?sort=relevant|recent` — top-level comments
+    (most liked first, or newest first), each with its `replies` nested
+    oldest first; an empty array means no comments yet.
+  - `POST /posts/{id}/comments` with `{"body", "parent_id"?}` — 201; 400
+    when the text is blank, over 1000 characters, or the parent is on
+    another post.
+  - `PUT /posts/{id}/vote` with `{"option_index"}` — 200 with `my_vote` and
+    `poll_results`; voting again replaces your vote; 400 when the index is
+    out of range or the post is not a poll.
+  - `PUT /bookmarks` with `{"post_id"}` or `{"job_id"}` — 200 (saving again
+    returns the same bookmark). `DELETE /bookmarks/{id}` (bookmark, post or
+    job id) — 204. `GET /me/bookmarks` — Saved, newest first, each with its
+    `post` or `job`; deleted or no longer visible items are left out.
+  - `POST /me/content-filters` with `{"kind": "hide_post", "post_id"}` or
+    `{"kind": "mute_author", "muted_user_id"}` — 201; the post or the
+    author's posts leave your feed. `DELETE /me/content-filters/{id}` (filter
+    id, or the post / user id) — 204, Undo.
 - a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides

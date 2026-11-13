@@ -277,6 +277,20 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   target). `_post_json(p)` = row + author, target_count, liked, bookmarked,
   my_vote, poll_results, mine, can_delete — reuse it (definer/service only).
   Tests that backdate posts must disable triggers (`created_at` immutable).
+- `internal/server/engagement.go` — OP-034..043 (`registerEngagement`), migration
+  `..._engagement_api.sql`, tests `engagement_test.go` (`newEngEnv`, `savedIDs`).
+  Thin handlers over definer RPCs: `like_target(post, comment)` (row +
+  `like_count`, on conflict do nothing), `unlike(id)`, `list_comments(pid,
+  relevant|recent)` (top-level array, `replies` nested recursively via
+  `_comment_json(c)` = row + author card, liked, mine, replies),
+  `create_comment(pid, parent, body)`, `vote_poll(pid, idx)` (upsert; row +
+  my_vote + poll_results), `save_bookmark(post, job)`, `remove_bookmark(id)`,
+  `list_bookmarks()` (row + item_kind + `post` (_post_json) | `job` (+poster);
+  live AND visible only), `add_content_filter(kind, post, user)` (idempotent),
+  `remove_content_filter(id)`. DELETE ids accept the row id OR the target id
+  (post/comment/job/muted user) and always 204. `_post_visible(pid)` =
+  can_see_post + no block with the author (→ PT404 'Post not found'); reuse it.
+  Handler helpers: `bodyObject`, `exactlyOne` (two optional uuid fields), `pathID`.
 - `internal/push` — `Sender` interface (`Send(ctx, Notification{UserIDs, Title, Body,
   Data})`); `push.Log` is the default until APNs/FCM and device-token storage
   exist. `Deps.Push`; sends run in a goroutine after commit.
@@ -303,6 +317,9 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   parallel, so the stub tolerates concurrent role creation. Endpoint HTTP tests
   can use `dbtest.New(t)` + `&db.DB{Pool: td.Pool}` + `auth.Sign` (see `internal/db/db_test.go`).
 - Deploy: `make deploy` / `make deploy-dry-run`; gate alone: `make rls-check DATABASE_URL=...`.
+- Known flake: `dbtest.TestRsvpReminders` fails when run between ~18:30 and
+  19:30 UTC (event "now + 3 days" starts just after 00:00 IST, so the day-of
+  email lands on the previous IST day). Not caused by later migrations.
 - Build: `go build -o bin/api ./cmd/api`. Run: `go run ./cmd/api`.
 - A Makefile mirrors these (`make test`, `make test-db`, `make build`).
 - No local Postgres? `npm pack @embedded-postgres/linux-x64@17.5.0-beta.15`
