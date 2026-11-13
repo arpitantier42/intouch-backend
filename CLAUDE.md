@@ -291,6 +291,22 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   wins, else notes; empty = unknown), `contribution_receipt(id)`,
   `mark_invitations_failed_for_email(email)`, `close_expired_raises(limit)`
   (for the scheduler, REQ-145). `list_events`' raise tab is unchanged (no labels).
+- `internal/server/jobs.go` — OP-075..080 (`registerJobs`, no migration; uses
+  `..._jobs.sql`). List = `jobs_feed where community_id and intent` + q
+  (strpos, opportunity: title/company/location; looking: poster_name/title/
+  location) + since + sort, `is_joined` first (403 'Members only'); items get
+  `mine`, `can_message`. Create = RLS insert (handler validates first via
+  `parseJobFields`: 'Add a role or title to post', http(s) apply_url, enums
+  normalised from 'Full-time'/'On site'); detail/create/update answer
+  `jobDetailSQL` (jobs_feed row, item_kind job, + `my_interests`; no row →
+  404, so tagged posts, blocks and non-members are 404). PATCH: select under
+  RLS (404) → poster check (403) → update whitelisted columns. Delete =
+  `delete_job`. Interests: note >280 runes → 400, resume extension via
+  `isImageURL("resume", url)` → 415, then `submit_job_interest` + push to the
+  poster after commit. No endpoint yet for `reply_job_interest` or listing
+  one's own requests (Profile → Activity reads `job_interests` under RLS).
+  Tests: `jobs_test.go` (`createJobAs`, `backdateJob` uses
+  `session_replication_role = replica`).
 - `internal/payments` — the only gateway adapter (RSK-005: Razorpay shapes
   are guessed). `Gateway` (`CreateOrder`, `Provider`), `Razorpay` HTTP impl
   (basic auth, POST /orders), `Sign`/`VerifySignature` (hex HMAC-SHA256),

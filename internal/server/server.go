@@ -129,5 +129,6 @@ func register(g Groups, d Deps) {
 	registerReports(g, d)
 	registerEvents(g, d)
 	registerRaises(g, d)
+	registerJobs(g, d)
 	registerWebhooks(g, d)
 }

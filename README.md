@@ -386,6 +386,30 @@ This repository holds:
     going attendees get an in-app notification and a push. 403 for anyone else.
   - `POST /events/{id}/reminders` with optional `{"channel":"push|email",
     "send_at"}` — "Remind me" (default: push 1 hour before start); 201.
+- jobs (bearer):
+  - `GET /communities/{id}/jobs?intent=opportunity|looking&q=…&since=24h|week|month&sort=newest|oldest`
+    — the community's Jobs list (default Opportunity, newest first; optional
+    `limit` 1–200, default 100). Full jobs and Home posts tagged "Available
+    job" / "Need job" are merged; each item has `item_kind` (`job`|`post`),
+    `has_details` (false for tagged posts: no detail page, no Apply),
+    `poster_name`, `poster_avatar_url`, `mine` and `can_message`. People who
+    blocked you, or whom you blocked, are left out. Search matches role,
+    company or location on Opportunity, and person, role or location on
+    Looking. 403 "Members only" when you have not joined.
+  - `POST /communities/{id}/jobs` with `{"intent", "title", "company",
+    "location", "job_type", "work_mode", "experience", "salary", "apply_url",
+    "details"}` — 201 job. 400 with `error.fields`: "Add a role or title to
+    post", an apply link that is not http(s), or an unknown type
+    (full_time|part_time|internship|contract|freelance; "Full-time" also
+    works) or work mode (on_site|remote|hybrid). 403 when not joined.
+  - `GET /jobs/{id}` — the job detail (+ `my_interests`); 404 when unknown,
+    deleted, a tagged post, or outside your communities.
+  - `PATCH /jobs/{id}` — the poster edits the same fields (403 for anyone else).
+  - `DELETE /jobs/{id}` — the poster deletes the job; it leaves Jobs and Saved (204).
+  - `POST /jobs/{id}/interests` with `{"kind":"interest|referral", "note",
+    "resume_url"}` — express interest or ask for a referral (201). The poster
+    gets an in-app notification and a push. 400 note over 280 characters or
+    your own job, 415 resume not PDF/DOCX, 409 already sent.
 - event RSVPs (bearer):
   - `PUT /events/{id}/rsvp` with `{"status":"going|not_sure|declined",
     "payment_status":"pay_later|verification_pending", "decline_reason":
