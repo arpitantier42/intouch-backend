@@ -351,6 +351,33 @@ This repository holds:
   - `POST /events/{id}/rsvps/{userId}/verify` — the event's host confirms an
     attendee's payment (seat confirmed, attendee gets a push); 403 not the
     host, 409 event full or the attendee is not going.
+- the Home feed and posts (bearer):
+  - `GET /communities/{id}/posts?chip=all|urgent|announcements&type=all|jobs|mentorship|announcements|events&since=24h|week|month&sort=newest|oldest&cursor=…`
+    — one page (20) of the community's feed, newest first by default, as a
+    JSON array of posts. Hidden posts, muted authors and blocked users are
+    left out. Urgent shows urgent or announcement posts; Jobs shows posts
+    tagged Available/Need job; Mentorship shows posts that mention a mentor.
+    The `X-Next-Cursor` header carries the cursor of the next page (absent
+    on the last page); `newer_than=<timestamp of the newest loaded post>`
+    returns only posts published since (pull-to-refresh). 403 "Members only"
+    for pending members and non-members.
+  - `POST /posts?community_ids=a,b` (omit for all joined communities) with
+    `{"body", "media_url", "media_kind": "image|video|document",
+    "media_bytes", "is_urgent", "is_announcement", "job_tag":
+    "general|available|need", "poll_options": [...]}`. 201 is the post;
+    every post carries `author`, `target_count` (for "Posted to all N
+    communities"), `liked`, `bookmarked`, `my_vote`, `poll_results`, `mine`
+    and `can_delete`. 400 text not 10–1,200 characters, more than one media
+    item, a poll with fewer than 2 options or no community; 403 a community
+    not joined, or an announcement from a plain member; 413 photo over 5 MB
+    or video over 50 MB.
+  - `GET /posts/{id}` — 404 "Post not found" when unknown, deleted or not in
+    one of the caller's communities (shared links show nothing to outsiders).
+  - `PATCH /posts/{id}` — the author edits `body`, `is_urgent`, `job_tag`
+    (General removes it from Jobs) and `pinned_to_profile`; 403 others.
+  - `DELETE /posts/{id}` — 204 for the author or a moderator, admin or owner
+    of a community it was posted to; 403 for anyone else. Deleted posts
+    leave the feed, Saved and Jobs.
 - a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides

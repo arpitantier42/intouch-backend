@@ -257,6 +257,26 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `confirmation_email`, mails the JWT `email` claim (`tokenEmail`) in a
   goroutine. Tests: `rsvp_test.go` (`newRsvpEnv`, `newEvent`, `fillSeats`,
   last-seat race), pgTAP `rsvp.test.sql`.
+- `internal/server/posts.go` — OP-029..033 (`registerPosts`), migration
+  `..._posts_api.sql`, tests `posts_test.go` (`postAs`, `feedIDs`, `setRole`).
+  `list_feed(cid, chip, type, since, sort, cursor_at, cursor_id, newer_than,
+  limit)` → jsonb array (feed_page's keyset/exclusions + `_feed_filter(p,
+  chip, type)`: urgent = urgent or announcement; jobs = job_tag
+  available|need or kind job; mentorship = body `~* '\mmentor'`; events =
+  kind event). Handler: since 24h|week|month → timestamp, cursor
+  `"<RFC3339>,<uuid>"`, `X-Next-Cursor` header when a full page came back.
+  `create_post(uuid[] | null = all joined, kind, body, media_url, media_kind,
+  urgent, announcement, job_tag, poll_options)` (PT400 no target / event|raise
+  kind / job kind without tag; PT403 not joined / announcement without
+  moderator+ in every target; kind derived from poll/media/announcement when
+  omitted). Handler checks 10–1200 runes, `media` list > 1, poll 2–10, 413
+  via `uploads.Lookup("post_image"|"post_video").MaxBytes` on `media_bytes`
+  (415 on `media_mime`). `get_post(id)` (PT404 'Post not found' incl. blocks),
+  `update_post(id, patch)` (body, is_urgent, job_tag, pinned_to_profile;
+  PT404 then PT403 non-author), `delete_post(id)` (author or moderator+ of any
+  target). `_post_json(p)` = row + author, target_count, liked, bookmarked,
+  my_vote, poll_results, mine, can_delete — reuse it (definer/service only).
+  Tests that backdate posts must disable triggers (`created_at` immutable).
 - `internal/push` — `Sender` interface (`Send(ctx, Notification{UserIDs, Title, Body,
   Data})`); `push.Log` is the default until APNs/FCM and device-token storage
   exist. `Deps.Push`; sends run in a goroutine after commit.
