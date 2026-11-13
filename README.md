@@ -105,6 +105,22 @@ This repository holds:
     when nothing is pending). The database function
     `accounts_due_for_purge()` lists accounts whose 14 days are over, for
     the scheduled purge job;
+  - community admission and roster management (bearer token required):
+    `POST /communities/{id}/join-requests` asks to join a public community
+    with answers to its questions (201 pending; 400 blank required answer;
+    403 private, invite only; 409 already pending or joined);
+    `POST /communities/{id}/join-requests/{userId}/decision?decision=approve|reject`
+    lets a joined owner or admin review a request, never their own;
+    `GET /communities/{id}/members?status=joined|pending` is the admin
+    panel's Members and Requests list, with role labels and answers (403
+    'Admins only' for everyone else);
+    `PATCH /communities/{id}/members/{userId}` with `{"role": "admin|moderator|member"}`
+    (owner only); `DELETE /communities/{id}/members/{userId}` removes a member
+    (owners and admins; never self or the owner; only the owner removes an
+    admin); `DELETE /me/memberships/{communityId}` leaves a community or
+    withdraws a request (409 for the owner); and
+    `POST /communities/{id}/transfer?to_user_id=...` hands ownership to a
+    joined member and makes the previous owner an admin;
 - a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides

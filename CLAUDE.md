@@ -91,6 +91,19 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/SECRET`; app redirect `intouch://auth-callback`.
   The test stub's `auth.users` has `phone`, `phone_confirmed_at`. Tests: `me_test.go`
   (`googleToken`, `meUser`).
+- `internal/server/admission.go` — OP-016..022 (`registerAdmission`), migration
+  `..._admission_roster.sql`. Handlers are thin: parse input, call one RPC as the
+  user, map PTnnn. RPCs: `request_join` (handler first runs `ensure_my_profile`),
+  `review_join_request`, `transfer_ownership` (identity migration), plus
+  `set_member_role(cid, uid, role)` (PT400 role ∉ admin|moderator|member, checked
+  first; PT403 unless caller is joined owner; PT403 target is owner; PT404 not
+  joined), `remove_member(cid, uid)` (owner/admin; PT403 self, owner, or admin
+  removed by a non-owner; PT404 none; also removes pending rows),
+  `leave_community(cid)` (PT409 owner, PT404 none), `list_members(cid, status)` →
+  jsonb array of membership rows + `role_label`, `profile{...}`, `answers[...]`
+  (PT403 'Admins only'). Join answers body: list, single object, or `{"answers": [...]}`.
+  Tests: `admission_test.go` (`admUser`, `admCommunity`, `e.raw` for array bodies),
+  pgTAP `admission_roster.test.sql`.
 - `internal/mailer` — `Mailer` interface (`Send(ctx, Message)`); `mailer.Log` is the
   default until a provider is wired (logs domain + subject only). `Deps.Mailer`.
 - `internal/gotrue` also has `SignInPassword`, `UpdatePassword(token, pw)`,

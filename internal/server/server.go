@@ -82,4 +82,5 @@ func register(g Groups, d Deps) {
 	registerAuthOTP(g, d)
 	registerAuthSessions(g, d)
 	registerMe(g, d)
+	registerAdmission(g, d)
 }
