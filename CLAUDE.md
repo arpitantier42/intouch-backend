@@ -177,6 +177,16 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   nil searcher or any provider error → 503 `gifUnavailable`. 200 body
   `{query, results[{id,title,url,preview_url,width,height}], next_offset|null, attribution}`.
   The send path never touches the provider (`TestTextSendingSurvivesGifOutage`).
+- `internal/server/social.go` — OP-059..061, 082..085 (`registerSocial`), migration
+  `..._blocks_connections.sql`. Handlers wrap `block_user`/`unblock_user`/
+  `send_connection_request`/`respond_to_connection` (social graph migration) plus
+  `list_blocks()` (rows + `profile` card), `delete_connection(id)` (either party;
+  PT404 otherwise; no notification), `list_connections(tab)` → `{tab, counts{incoming,
+  sent,connected}, items[row + peer]}` (sent rows always read `pending` — silent decline;
+  blocked pairs excluded). Block/connect run `ensure_my_profile` first. Body ids:
+  `blocked_id` / `addressee_id` (or `user_id`). `_profile_card(uid)` (service/definer
+  only) is the small profile JSON — reuse it. `connections` is in publication
+  `supabase_realtime`. Tests: `social_test.go` (`connState`).
 - `internal/push` — `Sender` interface (`Send(ctx, Notification{UserIDs, Title, Body,
   Data})`); `push.Log` is the default until APNs/FCM and device-token storage
   exist. `Deps.Push`; sends run in a goroutine after commit.

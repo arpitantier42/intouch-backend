@@ -171,6 +171,23 @@ This repository holds:
     `q` is 400. When the key is unset or GIPHY fails or times out (5 s) the
     answer is 503 "GIF search is unavailable right now. You can still send
     text." — message sending never depends on it;
+  - blocking (bearer): `POST /me/blocks {"blocked_id"}` blocks a user (201,
+    idempotent; 400 for yourself, 404 unknown user) and removes any
+    connection and follows between you, so the relationship is Idle and
+    neither of you can message the other; `DELETE /me/blocks/{userId}`
+    unblocks (204; you stay unconnected); `GET /me/blocks` lists the people
+    you blocked, newest first, with a `profile` card. Blocked users are never
+    told;
+  - connections (bearer): `POST /connections {"addressee_id"}` sends a
+    request (201 pending; 403 when a block exists; 409 already pending or
+    connected); `PATCH /connections/{id}?action=accept|decline|undo` lets the
+    recipient accept, ignore or undo an ignore (403 for the sender);
+    `DELETE /connections/{id}` withdraws, cancels or removes (204, nobody is
+    notified); `GET /me/connections?tab=incoming|sent|connected` returns
+    `{tab, counts: {incoming, sent, connected}, items: [connection + peer]}`.
+    An ignored request still shows as pending to its sender. Connection
+    changes are published to Supabase Realtime (`connections` table), so
+    both people's screens update without a reload;
   - chat conversations (bearer; all scoped to one community):
     - `GET /communities/{id}/threads?filter=all|unread|groups|calls&q=` lists
       the caller's conversations in that community only, most recent first,

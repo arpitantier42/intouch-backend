@@ -111,4 +111,5 @@ func register(g Groups, d Deps) {
 	registerThreads(g, d)
 	registerMessages(g, d)
 	registerGifs(g, d)
+	registerSocial(g, d)
 }
