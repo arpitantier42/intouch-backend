@@ -55,6 +55,15 @@ This repository holds:
   a time by a keyset cursor, newest or oldest first, with a "newer than"
   read for pull-to-refresh, and leave out hidden posts, muted authors and
   blocked users;
+- the jobs data store: Opportunity and Looking jobs posted by joined members
+  of one community (a non-blank title of up to 120 characters, an apply link
+  that must be http(s)), and one combined Jobs list per community that merges
+  those jobs with Home posts tagged "Available job" (Opportunity) or "Need
+  job" (Looking). Tagged posts have no detail page, and they leave Jobs as
+  soon as they are deleted or retagged as general. Members express interest
+  or ask for a referral with a note of up to 280 characters and a PDF or DOCX
+  resume; the poster is notified, and the requester is notified when the
+  poster replies. Saved jobs drop out of Saved once deleted;
 - account creation with one-time codes, in front of Supabase Auth:
   - `POST /auth/sign-up` checks the form (name 2–80 characters, email up to
     255, password 8–72, matching confirmation) and has Supabase Auth email a

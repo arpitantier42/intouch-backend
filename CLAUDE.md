@@ -466,10 +466,9 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `(kind, post_id | muted_user_id)` / delete own (= Undo). Counters
   (`like_count`, `comment_count`) by definer triggers. `poll_results(pid)` →
   jsonb int array per option.
-- `bookmarks.job_id` has NO FK yet and `bookmarks_insert_own` only allows
-  posts: the jobs migration (WI-008) must add the FK to `jobs` (on delete
-  cascade), replace `bookmarks_insert_own` / `bookmarks_select_own` to accept
-  live jobs.
+- `bookmarks.job_id` → `jobs` (on delete cascade, added by the jobs
+  migration); insert accepts a visible post or `can_see_job(job)`, select
+  hides deleted posts and deleted jobs.
 - Feed: `feed_page(cid, sort newest|oldest, cursor_at, cursor_id,
   newer_than, since, limit 1..50 default 20)` → setof posts (definer; PT403
   'Members only'; PT400 sort). Keyset on (post_targets.created_at, post_id);
@@ -485,6 +484,44 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
 - Perf check `TestFeedPerformance` (dbtest, skipped with `-short`): 25k
   members, 50k posts → index scan on `post_targets_feed_idx`, ~1 ms per page.
   Tests: `feed_engagement_test.go` (`newPost` inserts as superuser, `feed`).
+
+## Jobs (migration `..._jobs.sql`)
+- Tables `jobs`, `job_interests`. `jobs`: client insert under RLS (columns
+  community_id, intent, title, company, location, job_type, work_mode,
+  experience, salary, apply_url, details; `poster_id` defaults to auth.uid(),
+  not granted). BEFORE insert trigger: poster joined to a live community →
+  else PT403 (fires before RLS); sets created/updated_at. Update trigger keeps
+  poster/community/created_at, stamps updated_at. Poster updates the same
+  columns minus community_id. CHECKs (→ 400): title `~ '\S'` ('Add a role or
+  title to post'), intent opportunity|looking, job_type, work_mode, apply_url
+  `_is_http_url`. Select = live + `is_joined`.
+- Helpers: `can_see_job(id)` (live job, caller joined to live community —
+  getJob 404 when false; a post id is never a job), `_job_live`, `is_job_poster`.
+- RPCs (authenticated, definer): `delete_job(id)` soft delete (PT404 not
+  visible, PT403 not poster); `submit_job_interest(job, kind, note, resume_url)`
+  → jsonb row (PT400 kind/own job, PT404 not visible or blocked, 22001 note >
+  280, 23514 resume not `.pdf|.docx`, 23505 same kind twice → 409) and
+  `notify(poster, 'job_interest', {job_interest_id, job_id, requester_id, kind})`;
+  `reply_job_interest(id)` (poster only: PT403 requester, PT404 others; first
+  reply stamps replied_at and notifies the requester 'job_interest_reply').
+  The handler (WI-030) should still map a non-PDF/DOCX resume to 415 first via
+  `uploads.Lookup("resume")`, and push to the poster after commit.
+- `job_interests` select: requester (Profile → Activity) or the job's poster;
+  no client insert/update.
+- **`jobs_feed` view** (owner rights, security_barrier; no RLS of its own —
+  filters inline: caller joined, live community, live rows, blocks either
+  way; anon gets 0 rows). Columns: `item_kind` job|post, `id`, `community_id`,
+  `poster_id`, `intent`, `title`, company…details, `has_details` (false for
+  posts → no details page/Apply), `post_id`, `created_at` (post_targets.created_at
+  for posts), `updated_at`, `poster_name`, `poster_avatar_url`. Posts map
+  available → opportunity, need → looking; title = body flattened, ≤120.
+  listJobs: `select … from jobs_feed where community_id = $1 and intent = $2`
+  + q/since/sort predicates; the main and community routes run the same query.
+  Inside views, call no client-revoked functions (anon lacks execute on
+  `is_joined`/`blocked_user_ids` → 42501): inline the checks.
+- Indexes: `jobs_list_idx (community_id, intent, created_at desc, id desc)
+  where deleted_at is null`; `posts_job_tag_idx` partial on job-tagged live posts.
+- Tests: `internal/dbtest/jobs_test.go` (`newJob`, `jobsFeed`).
 
 - Embedded Postgres note: the `pgserver` wheel build has no pgcrypto; use the
   `@embedded-postgres` package (it ships pgcrypto).
