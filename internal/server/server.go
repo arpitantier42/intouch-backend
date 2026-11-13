@@ -94,4 +94,5 @@ func register(g Groups, d Deps) {
 	registerAdmission(g, d)
 	registerInvitations(g, d)
 	registerUploads(g, d)
+	registerThreads(g, d)
 }

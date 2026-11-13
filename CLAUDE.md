@@ -138,6 +138,22 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `logo_url`, `media_url`, `attachment_url`, `resume_url` can call
   `uploads.Lookup(...).Ext(mime)` to reuse the type rules (e.g. 415 for a
   non-image logo in updateCommunity, a non-PDF/DOCX resume in job interest).
+- `internal/server/threads.go` — OP-046..049, 055..057 (`registerThreads`), migration
+  `..._chat_threads.sql`; handlers reuse `admissionHandlers.rpcJSON`. RPCs (authenticated,
+  definer): `list_threads(cid, filter, q)` → jsonb array (PT403 not joined; thread row +
+  `title`, `subtitle`, `avatar_url`, `community_label`, `unread_count`, `muted_until`,
+  `muted`, `member_count`, `peer`, `last_call`; hides `hidden_at`/left rows and DMs with
+  a block), `open_dm(cid, uid)` (upsert on dm_key; PT400 self, PT403 not joined/block;
+  clears caller's hidden_at), `create_group(cid, name, desc, uuid[])`,
+  `add_participants(tid, uuid[])` (re-adding an exited member resets joined_at and sets
+  cleared_at = now()), `update_thread_settings(tid, jsonb, set_disappearing, secs)`
+  (keys muted_until, mute off|1h|8h|1w|always, alert_*, sound, action clear|delete|exit;
+  left_at only via exit), `get_thread(tid)` (participants, member_count, peer,
+  `shared_counts` {media, links, documents} over `_visible_messages(tid)`, `me`; no
+  encryption field — REQ-117), `log_call(tid, media, outcome, duration, started_at)`.
+  `_joined_member(cid, uid)` = joined to a live community. The send RPC (WI-022) should
+  reuse `_joined_member` + `blocked_between`. Tests: `threads_test.go` (`chatJoin`,
+  `chatSend` insert directly as superuser).
 - `internal/mailer` — `Mailer` interface (`Send(ctx, Message)`); `mailer.Log` is the
   default until a provider is wired (logs domain + subject only). `Deps.Mailer`.
 - `internal/gotrue` also has `SignInPassword`, `UpdatePassword(token, pw)`,

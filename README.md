@@ -162,6 +162,36 @@ This repository holds:
     The storage buckets enforce the same limits, so an upload that skips this
     check is still refused. Without `SUPABASE_URL` and
     `SUPABASE_SERVICE_ROLE_KEY` the endpoint answers 503;
+  - chat conversations (bearer; all scoped to one community):
+    - `GET /communities/{id}/threads?filter=all|unread|groups|calls&q=` lists
+      the caller's conversations in that community only, most recent first,
+      with title, subtitle, avatar, preview, unread count, `muted` and the
+      DM peer (403 when not a joined member). Deleted chats, exited groups
+      and DMs with blocked people are left out; `q` matches title, preview,
+      subtitle and the community name; `calls` lists conversations with a
+      call, with the latest as `last_call`.
+    - `POST /communities/{id}/threads/direct?user_id=` opens the existing DM
+      with a member or creates it (200; 403 when either person is not a
+      joined member or one has blocked the other).
+    - `POST /communities/{id}/threads/groups?member_ids=a,b` with
+      `{"name","description"}` creates a group (201; 400 without a name or
+      members; 403 when someone is not a member of the community).
+    - `POST /threads/{id}/participants` with `{"user_id"}` (or
+      `{"user_ids":[...]}`) adds members to a group (201; 403 for people
+      outside the community).
+    - `PATCH /threads/{id}/me` changes the caller's own settings: `mute`
+      (`off|1h|8h|1w|always`) or `muted_until` (a mute simply ends at that
+      time), `alert_mentions`, `alert_replies`, `alert_reactions`, `sound`,
+      and `action` `clear` (hides earlier messages for the caller only),
+      `delete` (also hides the chat until a new message) or `exit` (groups).
+      `?disappearing_seconds=0|86400|604800|7776000` turns disappearing
+      messages off or on for later messages. 403 when not a participant.
+    - `GET /threads/{id}` returns the info page: participants, member count,
+      the DM peer, shared `media`/`links`/`documents` counts and the caller's
+      settings. It makes no encryption claim.
+    - `POST /threads/{id}/calls` with `{"media":"audio|video","outcome":
+      "completed|missed|declined|cancelled","duration_seconds"}` records a
+      call attempt (201; a duration only for completed calls);
 - a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides
