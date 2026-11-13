@@ -215,6 +215,21 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   bad values → 400 `error.fields`. Features that notify (job interest
   replies, event deletion, …) just call `notify(user, kind, payload)` and the
   row shows here. Tests: `notifications_test.go` (`addNotification`).
+- `internal/server/rsvp.go` — OP-068/069 (`registerRsvp`), migration `..._rsvp.sql`.
+  `set_rsvp(eid, status, payment, reason, note, push, email)` (authenticated,
+  definer): locks the event `for no key update` FIRST, PT404/PT403 'Members
+  only'/PT400/PT409 'Event full' (not-yet-going member when confirmed ≥ cap,
+  paid pay_later included); payment null keeps the current choice, 'verified'
+  is host-only (PT400), verified is sticky; null reminder flags keep the row
+  value (default on). Declined/not_sure → `notify(creator, 'rsvp_response')`
+  (no push). `verify_rsvp_payment(eid, uid)` (creator only PT403, free PT400,
+  not going PT409, full PT409, idempotent). Both return `_rsvp_json(row,
+  confirmation)` = row + badge, seats_left, seats_left_label, join_url
+  (confirmed only), event{...}, confirmation_email — reuse it for event
+  reads (WI-027). Handler adds `calendar{google,outlook,ics}` and, when
+  `confirmation_email`, mails the JWT `email` claim (`tokenEmail`) in a
+  goroutine. Tests: `rsvp_test.go` (`newRsvpEnv`, `newEvent`, `fillSeats`,
+  last-seat race), pgTAP `rsvp.test.sql`.
 - `internal/push` — `Sender` interface (`Send(ctx, Notification{UserIDs, Title, Body,
   Data})`); `push.Log` is the default until APNs/FCM and device-token storage
   exist. `Deps.Push`; sends run in a goroutine after commit.

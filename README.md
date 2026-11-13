@@ -277,6 +277,25 @@ This repository holds:
       pin and stars.
     - `PUT /messages/{id}/marks?action=react|unreact|star|unstar|pin|unpin`
       (`{"emoji"}` for react; 409 on a deleted message).
+- event RSVPs (bearer):
+  - `PUT /events/{id}/rsvp` with `{"status":"going|not_sure|declined",
+    "payment_status":"pay_later|verification_pending", "decline_reason":
+    "schedule|not_relevant|too_far|next_time|other", "note", "remind_push",
+    "remind_email"}` (everything but `status` optional). The last seat goes
+    to exactly one member: a full event answers 409 "Event full". A free
+    "going" confirms the seat; on a paid event "I'll pay later" holds an
+    unconfirmed seat (badge "Payment pending") and "I've paid" waits for the
+    host (badge "Verification pending"). The answer is the RSVP plus
+    `badge`, `seats_left` / `seats_left_label` ("3 seats left"), `join_url`
+    (only with a confirmed seat), the `event` summary and `calendar` links
+    (Google, Outlook and an iCalendar file for Apple). Going schedules push
+    reminders 1 day and 1 hour before and, when email reminders are on, a
+    day-of email; becoming "going" with email on sends a confirmation email.
+    Declining or "not sure" tells the host quietly (in-app notification, no
+    push). 403 not a member, 404 unknown event.
+  - `POST /events/{id}/rsvps/{userId}/verify` — the event's host confirms an
+    attendee's payment (seat confirmed, attendee gets a push); 403 not the
+    host, 409 event full or the attendee is not going.
 - a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides

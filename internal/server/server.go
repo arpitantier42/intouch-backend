@@ -114,4 +114,5 @@ func register(g Groups, d Deps) {
 	registerSocial(g, d)
 	registerPeople(g, d)
 	registerNotifications(g, d)
+	registerRsvp(g, d)
 }
