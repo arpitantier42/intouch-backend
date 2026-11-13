@@ -192,6 +192,30 @@ This repository holds:
     - `POST /threads/{id}/calls` with `{"media":"audio|video","outcome":
       "completed|missed|declined|cancelled","duration_seconds"}` records a
       call attempt (201; a duration only for completed calls);
+  - messages:
+    - `GET /threads/{id}/messages?view=all|pinned|starred|media|links|documents&q=&after=&before=&limit=`
+      pages a conversation (newest 50 by default, oldest first; `after` =
+      everything newer, for catching up after a reconnect). Each message
+      carries `status` (sent/delivered/read, own messages only), `reactions`,
+      `starred` (the caller's own star only) and `can_edit`. Opening the
+      conversation (`view=all`, no search) marks it read and resets its
+      unread count. 403 when not a participant.
+    - `POST /threads/{id}/messages` with header `scope_community_id` (the
+      community the app is currently showing) and `{"kind","body",
+      "attachment_url","attachment_bytes","reply_to_id","forwarded"}`, or
+      `{"forward_of_id"}` to forward a copy of a visible message. 201; the
+      conversation moves to the top and the sender's unread resets. 400 for
+      whitespace-only text, 403 when scoped to another community, a block
+      exists either way or the DM partner left, 413 over 25 MB. Unmuted
+      participants get a push alert (an expired mute alerts again).
+    - `PATCH /messages/{id}` `{"body"}` edits one's own message (blank text
+      leaves it unchanged; 403 not the sender, 409 deleted).
+    - `DELETE /messages/{id}?scope=me|everyone` (204): `me` hides it for the
+      caller only; `everyone` (sender only, 409 if already deleted) shows
+      "This message was deleted" and clears attachment, reply, reactions,
+      pin and stars.
+    - `PUT /messages/{id}/marks?action=react|unreact|star|unstar|pin|unpin`
+      (`{"emoji"}` for react; 409 on a deleted message).
 - a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides

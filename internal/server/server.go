@@ -11,6 +11,7 @@ import (
 	"github.com/intouch/api/internal/db"
 	"github.com/intouch/api/internal/gotrue"
 	"github.com/intouch/api/internal/mailer"
+	"github.com/intouch/api/internal/push"
 	"github.com/intouch/api/internal/storage"
 )
 
@@ -28,6 +29,8 @@ type Deps struct {
 	// SUPABASE_SERVICE_ROLE_KEY are set, New builds the HTTP client.
 	// Still nil → POST /uploads answers 503.
 	Storage storage.Signer
+	// Push sends APNs/FCM alerts; nil means push.Log.
+	Push push.Sender
 }
 
 // Groups are the route groups endpoint tickets register into:
@@ -54,6 +57,9 @@ func New(deps ...Deps) *gin.Engine {
 	}
 	if d.Mailer == nil {
 		d.Mailer = mailer.Log{}
+	}
+	if d.Push == nil {
+		d.Push = push.Log{}
 	}
 	if d.DB != nil && d.Verifier.Revoked == nil {
 		d.Verifier.Revoked = sessionRevoked(d.DB)
@@ -95,4 +101,5 @@ func register(g Groups, d Deps) {
 	registerInvitations(g, d)
 	registerUploads(g, d)
 	registerThreads(g, d)
+	registerMessages(g, d)
 }

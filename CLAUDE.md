@@ -154,6 +154,24 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `_joined_member(cid, uid)` = joined to a live community. The send RPC (WI-022) should
   reuse `_joined_member` + `blocked_between`. Tests: `threads_test.go` (`chatJoin`,
   `chatSend` insert directly as superuser).
+- `internal/server/messages.go` — OP-050..054 (`registerMessages`), migration
+  `..._messaging.sql`. RPCs (authenticated, definer): `send_message(tid, scope_cid,
+  kind, body, url, bytes, reply_to, forwarded, forward_of)` (PT403 not active
+  participant / scope ≠ thread community / DM peer not joined / `blocked_between`
+  (DMs only); PT400 content; PT413 > 25 MB; forward_of copies a visible message,
+  forwarded=true), `list_messages(tid, view, q, after, before, limit)` (view=all
+  without q also sets own last_read_at/last_delivered_at = now()),
+  `edit_message(mid, body)` (403 → 409 → blank = unchanged), `delete_message(mid,
+  'me'|'everyone')`, `mark_message(mid, action, emoji)` (pin → kind 'pin'
+  pseudo-mark), `message_push(mid)` → push payload (unmuted, unblocked, joined).
+  `_my_message(mid)` = visible-to-caller or PT404; `_message_json(m)` adds
+  `mine,status,can_edit,starred,reactions` — reuse both. Scope header
+  `scope_community_id` (also `Scope-Community-Id`). Tests: `messages_test.go`
+  (`newMsgEnv`, `send`, `fakePush`), load check `messages_load_test.go`
+  (skipped with `-short`), pgTAP `messaging.test.sql`.
+- `internal/push` — `Sender` interface (`Send(ctx, Notification{UserIDs, Title, Body,
+  Data})`); `push.Log` is the default until APNs/FCM and device-token storage
+  exist. `Deps.Push`; sends run in a goroutine after commit.
 - `internal/mailer` — `Mailer` interface (`Send(ctx, Message)`); `mailer.Log` is the
   default until a provider is wired (logs domain + subject only). `Deps.Mailer`.
 - `internal/gotrue` also has `SignInPassword`, `UpdatePassword(token, pw)`,
