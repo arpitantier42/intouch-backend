@@ -30,6 +30,10 @@ type Config struct {
 	RazorpayKeyID     string // RAZORPAY_KEY_ID
 	RazorpayKeySecret string // RAZORPAY_KEY_SECRET
 	RazorpayWebhook   string // RAZORPAY_WEBHOOK_SECRET
+
+	// AppLinkBase prefixes links in emails, e.g. invite links
+	// <base>communities/<id>/invite/<code>. APP_LINK_BASE, default "intouch://".
+	AppLinkBase string
 }
 
 // Load reads the configuration from the environment.
@@ -54,6 +58,13 @@ func FromLookup(get func(string) string) Config {
 		RazorpayKeyID:      get("RAZORPAY_KEY_ID"),
 		RazorpayKeySecret:  get("RAZORPAY_KEY_SECRET"),
 		RazorpayWebhook:    get("RAZORPAY_WEBHOOK_SECRET"),
+		AppLinkBase:        get("APP_LINK_BASE"),
+	}
+	if c.AppLinkBase == "" {
+		c.AppLinkBase = "intouch://"
+	}
+	if !strings.HasSuffix(c.AppLinkBase, "/") {
+		c.AppLinkBase += "/"
 	}
 	if c.Port == "" {
 		c.Port = "8080"

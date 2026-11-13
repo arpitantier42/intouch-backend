@@ -104,6 +104,23 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   (PT403 'Admins only'). Join answers body: list, single object, or `{"answers": [...]}`.
   Tests: `admission_test.go` (`admUser`, `admCommunity`, `e.raw` for array bodies),
   pgTAP `admission_roster.test.sql`.
+- `internal/server/invitations.go` — OP-025..028 (`registerInvitations`), migration
+  `..._invitations.sql`. `create_invitations(cid, channel, emails[], user_ids[],
+  expires_at, max_uses)` → jsonb array (PT403 unless `can_invite`; PT400 bad
+  channel/past expiry/max_uses<1/no or >100 recipients/malformed email/self/joined
+  member; PT404 unknown in-app user; emails deduped case-insensitively).
+  Handler validates emails first (`error.fields["emails[i]"]`, nothing created),
+  answers a single object for singular bodies (`invitee_email`, `invitee_user_id`,
+  link/whatsapp) and an array for `emails`/`invitee_user_ids`; email invites are
+  sent after commit in a goroutine via `Deps.Mailer`, a send error calls
+  service-only `mark_invitation_failed(id)` (email + still `sent` only — the
+  bounce webhook should call it too). GET is public (`AsAnon`, `open_invitation`
+  flattened: invitation fields + `community` + `questions`; bad uuid → 404).
+  Accept runs `ensure_my_profile` then `accept_invitation` (404 unknown, 410
+  unusable). `revoke_invitation(cid, code)` (PT403/PT404, keeps first revoked_at).
+  Config `APP_LINK_BASE` (default `intouch://`) builds `<base>communities/<id>/invite/<code>`.
+  Tests: `invitations_test.go`, pgTAP `invitations.test.sql`. `e.raw` with token ""
+  sends no Authorization header.
 - `internal/mailer` — `Mailer` interface (`Send(ctx, Message)`); `mailer.Log` is the
   default until a provider is wired (logs domain + subject only). `Deps.Mailer`.
 - `internal/gotrue` also has `SignInPassword`, `UpdatePassword(token, pw)`,
@@ -153,7 +170,7 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `transfer_ownership(cid, to_user)`, `request_join(cid, answers)`,
   `review_join_request(cid, user, 'approve'|'reject')`, `open_invitation(cid, code)`
   (anon; returns jsonb preview + questions, marks opened),
-  `accept_invitation(cid, code, answers)`. Answers jsonb: `[{"question_id","value"}]`.
+  `accept_invitation(cid, code, answers)`, `create_invitations`, `revoke_invitation`. Answers jsonb: `[{"question_id","value"}]`.
   Required questions are enforced in `_save_join_answers`.
 - Ownership: partial unique index `memberships_one_owner_key` (≤1 owner) plus
   deferred constraint triggers (≥1 owner at commit). Transfer demotes then promotes

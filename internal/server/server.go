@@ -83,4 +83,5 @@ func register(g Groups, d Deps) {
 	registerAuthSessions(g, d)
 	registerMe(g, d)
 	registerAdmission(g, d)
+	registerInvitations(g, d)
 }

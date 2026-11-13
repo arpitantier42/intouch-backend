@@ -121,6 +121,26 @@ This repository holds:
     withdraws a request (409 for the owner); and
     `POST /communities/{id}/transfer?to_user_id=...` hands ownership to a
     joined member and makes the previous owner an admin;
+  - invitations: `POST /communities/{id}/invitations` (bearer) issues
+    invitations for a `link`, `whatsapp`, `email` or `in_app` channel —
+    `{"channel": "link"}`, `{"channel": "email", "emails": [...], "note": "..."}`
+    or `{"channel": "in_app", "invitee_user_ids": [...]}` (single recipients:
+    `invitee_email` / `invitee_user_id`), with optional `expires_at` (default
+    14 days) and `max_uses` (default 1). Each recipient gets its own random
+    128-bit code; only roles allowed by the community's invite setting may
+    invite (403); a malformed address, yourself or an existing member is
+    400 and nothing is created. Email invitations are sent by the platform
+    with a link `<APP_LINK_BASE>communities/{id}/invite/{code}`; a failed
+    send marks the invitation `failed`.
+    `GET /communities/{id}/invitations/{code}` (no sign-in) returns the
+    invitation with a community preview and its join questions and records
+    the open; expired, revoked, used-up or mismatched codes get 404 "This
+    invitation is not valid. Ask a community admin for an invite.".
+    `POST /communities/{id}/invitations/{code}/accept` (bearer, answers as
+    for join requests) makes the caller a joined member at once (410 when
+    expired, revoked or used up; an existing member gets their membership
+    back unchanged). `DELETE /communities/{id}/invitations/{code}` revokes
+    (204; 403 for roles that cannot invite);
 - a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides
@@ -150,6 +170,7 @@ Environment variables (see `.env.example`):
 | `WEBHOOK_API_KEY` | API | key callers send as `X-API-Key` on `/internal/...` routes (required in production) |
 | `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | API | Supabase keys for auth and storage calls |
 | `EMAIL_API_KEY`, `EMAIL_FROM`, `PUSH_API_KEY`, `GIF_API_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | API | optional provider keys; empty keeps the feature off |
+| `APP_LINK_BASE` | API | prefix of app links in emails, default `intouch://` (invite links are `<base>communities/<id>/invite/<code>`) |
 | `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`, `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` | Supabase CLI | Google OAuth client for "Continue with Google" (`supabase/config.toml`); on a hosted project set them under Authentication → Providers → Google, with redirect URI `<SUPABASE_URL>/auth/v1/callback` and `intouch://auth-callback` as an allowed app redirect |
 | `TEST_DATABASE_URL` | tests | superuser Postgres URL; tests create and drop their own databases |
 | `SUPABASE_PROJECT_REF`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `DEPLOY_COMMAND` | deploy | target project and the command that rolls out the built image (`$IMAGE`) |

@@ -48,7 +48,9 @@ func (e *sessEnv) raw(t *testing.T, method, path, token string, body any) (int, 
 	}
 	req := httptest.NewRequest(method, path, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	w := httptest.NewRecorder()
 	e.r.ServeHTTP(w, req)
 	var out any
