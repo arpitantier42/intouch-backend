@@ -45,6 +45,16 @@ This repository holds:
   community admins can read (members see the last 4 account digits), and
   contributions recorded once per gateway payment, so a repeated payment
   webhook never counts twice;
+- the feed and engagement data store: one post published to one or more of
+  the author's joined communities (text 10–1200 characters, at most one
+  media item, polls with 2–10 options), comments with replies, likes with
+  live counts (liking twice counts once), one replaceable poll vote per
+  member, bookmarks (deleted posts drop out of Saved), per-viewer hidden
+  posts and muted authors, and abuse reports that only platform operators
+  can read and that never reveal who filed them. Feed pages are read 20 at
+  a time by a keyset cursor, newest or oldest first, with a "newer than"
+  read for pull-to-refresh, and leave out hidden posts, muted authors and
+  blocked users;
 - account creation with one-time codes, in front of Supabase Auth:
   - `POST /auth/sign-up` checks the form (name 2–80 characters, email up to
     255, password 8–72, matching confirmation) and has Supabase Auth email a
@@ -393,6 +403,10 @@ Database schema, policy and access-boundary tests against any Postgres 17 superu
 ```sh
 TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres go test -count=1 ./internal/dbtest/... ./internal/db/...
 ```
+
+This includes two load checks (skip them with `-short`): chat delivery, and
+the feed check, which seeds 25,000 members and 50,000 posts and asserts that a
+feed page is an index scan that runs in under 50 ms (about 1 ms measured).
 
 The pgTAP suites in `supabase/tests/database` also run under the Supabase CLI:
 

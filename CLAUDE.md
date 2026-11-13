@@ -437,5 +437,54 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `donor_count` counts distinct donors. Send the receipt only when `applied`,
   then `mark_receipt_sent(id)`. Donor and organiser/admins can select.
 
+## Feed, engagement and reports (migration `..._feed_engagement.sql`)
+- Tables `posts`, `post_targets`, `comments`, `likes`, `poll_votes`,
+  `bookmarks`, `content_filters`, `reports`. Posts/targets: NO client inserts —
+  the create-post / create-event / create-raise RPCs (definer) insert them.
+  Trigger on `post_targets` insert: author must be joined to a live community
+  (PT403 'You can only post to communities you have joined.'), and copies the
+  post's `created_at` into `post_targets.created_at` (feed keyset column).
+  `posts.created_at` is immutable (update trigger); body change stamps `edited_at`.
+- Post CHECKs (→ 23514 → 400): kind list; body ≥10 trimmed chars unless
+  event/raise; body or media or event/raise required; media_url⇔media_kind;
+  image/video/document kinds need matching media_kind; poll ⇔
+  `_poll_options_ok` (2–10 non-blank strings); event⇔event_id, raise⇔raise_id;
+  kind announcement ⇒ is_announcement. Moderator+-only announcements and the
+  413 size checks are the RPC's job (use `uploads.Lookup`).
+- Access: `can_see_post(pid)` (live post, caller joined to a live target
+  community) — posts/comments select, likes/votes/bookmarks/filters insert.
+  Author may `update (body, is_urgent, job_tag, pinned_to_profile)`.
+  `post_targets` readable by joined members of that community and the author.
+  Soft delete = set `deleted_at` (RPC, WI-017) — hides from feed, can_see_post, Saved.
+- Clients write directly (column grants, `user_id`/`author_id` default
+  `auth.uid()`): comments insert `(post_id, parent_id, body)` (blank → 23514;
+  parent on another post → PT400); likes insert `(post_id|comment_id)` with
+  `on conflict (user_id, post_id) do nothing` (or `(user_id, comment_id)`),
+  delete own; poll_votes upsert `on conflict (post_id, user_id) do update set
+  option_index` (trigger PT400 not a poll / out of range); bookmarks insert
+  `(post_id)` / delete own (select hides deleted posts); content_filters insert
+  `(kind, post_id | muted_user_id)` / delete own (= Undo). Counters
+  (`like_count`, `comment_count`) by definer triggers. `poll_results(pid)` →
+  jsonb int array per option.
+- `bookmarks.job_id` has NO FK yet and `bookmarks_insert_own` only allows
+  posts: the jobs migration (WI-008) must add the FK to `jobs` (on delete
+  cascade), replace `bookmarks_insert_own` / `bookmarks_select_own` to accept
+  live jobs.
+- Feed: `feed_page(cid, sort newest|oldest, cursor_at, cursor_id,
+  newer_than, since, limit 1..50 default 20)` → setof posts (definer; PT403
+  'Members only'; PT400 sort). Keyset on (post_targets.created_at, post_id);
+  `newer_than` = pull-to-refresh; excludes deleted, hidden posts, muted authors,
+  blocks either way. WI-017 adds chip/type filters as extra predicates (keep
+  the `post_targets_feed_idx` order by) and decorations (target count for
+  'Posted to all N communities').
+- Reports: insert via `create_report(kind, target_id, reason, details)` →
+  jsonb without `reporter_id` (PT400 'Choose a reason.'); `list_reports(status)`
+  → jsonb array (PT403 'Operators only'). `reporter_id` has no select grant
+  for anyone; RLS select = `is_operator()`.
+- Realtime: `posts`, `post_targets`, `comments` in `supabase_realtime` (live counts).
+- Perf check `TestFeedPerformance` (dbtest, skipped with `-short`): 25k
+  members, 50k posts → index scan on `post_targets_feed_idx`, ~1 ms per page.
+  Tests: `feed_engagement_test.go` (`newPost` inserts as superuser, `feed`).
+
 - Embedded Postgres note: the `pgserver` wheel build has no pgcrypto; use the
   `@embedded-postgres` package (it ships pgcrypto).
