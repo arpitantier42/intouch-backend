@@ -122,5 +122,43 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   career|system_design|referral|resume|grad_school, PT400 missing; PT404
   unknown/blocked; stores a `mentorship` notification with
   `{mentorship_request_id, requester_id}`).
+## Chat (migration `..._chat.sql`)
+- Tables `threads`, `thread_participants`, `messages`, `message_marks`,
+  `call_logs`. No client inserts on any of them: the chat RPCs (later tickets,
+  SECURITY DEFINER) insert threads/participants/messages/marks/call logs and
+  set `pinned_at`/`edited_at`/`deleted_at`. Clients may only
+  `update (last_delivered_at, last_read_at, muted_until, alert_*, sound,
+  cleared_at, hidden_at)` of their own participant row.
+- `dm_key` = `_dm_key(community, a, b)` = `<community>:<_pair_key(a,b)>`
+  (110 chars, unique) — open-DM RPC upserts on it. Groups: `name` required,
+  `dm_key` null (CHECK `threads_dm_shape`).
+- Access helper: `is_thread_participant(tid)` (caller) /
+  `is_active_participant(tid, uid)` (service/definer only): participant row
+  with `left_at is null` AND joined to the thread's live community. Every chat
+  policy uses it. Send RPCs must also check `blocked_between`.
+- Triggers do the bookkeeping, so RPCs just insert/update:
+  insert message → `expires_at` from `threads.disappearing_seconds`, thread
+  `last_message_at`/`last_message_preview` updated (list order =
+  `coalesce(last_message_at, created_at) desc`), others' `unread_count`+1 and
+  `hidden_at` cleared, sender's unread 0 and `last_read_at` = message time.
+  Advancing `last_read_at` recomputes `unread_count` (marking read = update
+  `last_read_at`); read/delivered marks never move backwards.
+  Setting `messages.deleted_at` tombstones (body/attachment/reply/pin nulled,
+  star+reaction marks deleted, preview 'This message was deleted'); a
+  tombstone cannot be undone.
+- Message RLS hides expired rows, rows older than my `cleared_at`, and rows I
+  marked `hidden_for_me` (Delete for me = insert that mark). Marks: own
+  marks visible to me only (stars private); reactions visible to participants.
+  One mark per (message, user, kind) — re-react = update emoji.
+- CHECKs: whitespace-only body (`body ~ '\S'`) → 23514; text needs body,
+  media kinds need `attachment_url`; `attachment_bytes` ≤ 26214400;
+  `disappearing_seconds` in 86400|604800|7776000; call `duration_seconds` only
+  for `completed`.
+- `message_status(mid)` → sent|delivered|read for the sender's ticks (read =
+  every other active participant's `last_read_at` ≥ created_at).
+- Realtime: all five tables are in publication `supabase_realtime` (created
+  if missing on plain Postgres); Realtime applies the RLS per subscriber.
+  Reconnect catch-up is `created_at > after` on messages.
+
 - Embedded Postgres note: the `pgserver` wheel build has no pgcrypto; use the
   `@embedded-postgres` package (it ships pgcrypto).

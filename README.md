@@ -28,6 +28,14 @@ This repository holds:
   revealed to the blocked person), a blocked-accounts list, one-way follows of
   public profiles with follower and following counts, and mentorship requests
   (a topic is required; the recipient gets a notification);
+- the chat data store: direct and group conversations scoped to one community
+  (the same two people have a separate DM in each community they share),
+  participants with unread counts, read and delivered marks, mute, alert,
+  clear and delete-chat settings, messages (whitespace-only text rejected,
+  disappearing messages, delete for me and delete for everyone, pins), private
+  stars, shared reactions and a call log. Only participants who are still
+  joined to the community can read a conversation, and new rows are published
+  to Supabase Realtime for live delivery;
 - a Go HTTP service, currently serving a health check.
 
 ## Stack
