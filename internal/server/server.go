@@ -81,4 +81,5 @@ func New(deps ...Deps) *gin.Engine {
 func register(g Groups, d Deps) {
 	registerAuthOTP(g, d)
 	registerAuthSessions(g, d)
+	registerMe(g, d)
 }

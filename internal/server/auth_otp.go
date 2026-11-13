@@ -268,9 +268,13 @@ func writeErr(c *gin.Context, err error) {
 }
 
 // abortFields answers 400 with the first message and every field error.
-func abortFields(c *gin.Context, fields map[string]string) {
+// order lists the field names in display order (default: sign-up fields).
+func abortFields(c *gin.Context, fields map[string]string, order ...string) {
 	var msg string
-	for _, k := range []string{"full_name", "email", "password", "confirm_password"} {
+	if len(order) == 0 {
+		order = []string{"full_name", "email", "password", "confirm_password"}
+	}
+	for _, k := range order {
 		if m, ok := fields[k]; ok {
 			msg = m
 			break

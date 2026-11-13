@@ -82,6 +82,29 @@ This repository holds:
     once (401), not only when they expire.
   - `GET /me/devices` lists the devices the user is signed in on, with
     `current: true` on the caller's;
+- the signed-in user's profile and account:
+  - `GET /me` returns the profile with `onboarding_complete` and
+    `deletion_requested_at`, so the app can route to Onboarding or Home and
+    offer to cancel a pending deletion. After a first "Continue with Google"
+    sign-in it creates the profile (name and photo from Google,
+    `onboarding_complete: false`). Without a valid session it answers 401.
+  - `PATCH /me` saves any of `username`, `full_name`, `headline`, `company`,
+    `city`, `bio`, `avatar_url`, `skills`, `interests`,
+    `onboarding_complete`, `profile_visibility` (`public`|`connections`),
+    `appear_in_search`, `hide_city`, `activity_status`, `login_alerts` and
+    `two_factor_enabled`. Usernames are 3–30 lowercase letters, digits, dots
+    or underscores; a username someone else already has gets 409 (also when
+    two people save it at the same moment). Bios are at most 160 characters.
+    Skills and interests are stored once each, however often they are sent.
+    Two-factor sign-in can only be turned on once Supabase Auth has
+    confirmed a phone number for the account (400 otherwise). Field errors
+    come back as 400 with `error.fields`.
+  - `POST /me/deletion?reason=...&confirm=DELETE` schedules the account for
+    permanent deletion 14 days later (400 unless `confirm` is exactly
+    `DELETE` and a reason is given); `DELETE /me/deletion` cancels it (404
+    when nothing is pending). The database function
+    `accounts_due_for_purge()` lists accounts whose 14 days are over, for
+    the scheduled purge job;
 - a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides
@@ -111,6 +134,7 @@ Environment variables (see `.env.example`):
 | `WEBHOOK_API_KEY` | API | key callers send as `X-API-Key` on `/internal/...` routes (required in production) |
 | `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | API | Supabase keys for auth and storage calls |
 | `EMAIL_API_KEY`, `EMAIL_FROM`, `PUSH_API_KEY`, `GIF_API_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | API | optional provider keys; empty keeps the feature off |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`, `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` | Supabase CLI | Google OAuth client for "Continue with Google" (`supabase/config.toml`); on a hosted project set them under Authentication → Providers → Google, with redirect URI `<SUPABASE_URL>/auth/v1/callback` and `intouch://auth-callback` as an allowed app redirect |
 | `TEST_DATABASE_URL` | tests | superuser Postgres URL; tests create and drop their own databases |
 | `SUPABASE_PROJECT_REF`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `DEPLOY_COMMAND` | deploy | target project and the command that rolls out the built image (`$IMAGE`) |
 

@@ -73,6 +73,24 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   iat < now() except the kept session; forgets other devices). Any later
   feature that must kill sessions (account deletion) should call these.
   Tables `revoked_sessions`, `session_revocations` have no client grants.
+- `internal/server/me.go` — OP-007..010 (`registerMe`), migration `..._profile_me.sql`.
+  Every /me handler first runs `ensure_my_profile(name, avatar)` (authenticated,
+  definer; name/picture from the JWT `user_metadata` — Google's `full_name`/`name`,
+  `avatar_url`/`picture`), so the first request after Google OAuth creates the
+  profile. Responses are `to_jsonb(profiles row)`. PATCH: whitelisted columns
+  (`parsePatch`), read-only/unknown keys ignored (incl. `phone`); chips trimmed and
+  deduped case-insensitively; 23505 on `profiles_username_key` → 409 with
+  `error.fields.username`. `two_factor_enabled` goes through `set_two_factor(bool)`
+  (PT400 unless a profile phone or an Auth-confirmed `auth.users.phone` exists;
+  copies it as `+<digits>`). Deletion: `request_account_deletion(reason)` (keeps the
+  first timestamp), `cancel_account_deletion()` (PT404), and service-only
+  `accounts_due_for_purge(limit)` for the scheduler (skips owners of live
+  communities; the purge deletes the auth user via the Auth admin API → cascade).
+  `abortFields(c, fields, order...)` takes the display order of fields.
+  Google OAuth: `supabase/config.toml` `[auth.external.google]` + env
+  `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/SECRET`; app redirect `intouch://auth-callback`.
+  The test stub's `auth.users` has `phone`, `phone_confirmed_at`. Tests: `me_test.go`
+  (`googleToken`, `meUser`).
 - `internal/mailer` — `Mailer` interface (`Send(ctx, Message)`); `mailer.Log` is the
   default until a provider is wired (logs domain + subject only). `Deps.Mailer`.
 - `internal/gotrue` also has `SignInPassword`, `UpdatePassword(token, pw)`,

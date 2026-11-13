@@ -28,6 +28,9 @@ create table if not exists auth.users (
   id    uuid primary key default gen_random_uuid(),
   email text unique
 );
+-- Supabase stores the confirmed phone without '+' (e.g. 919876543210).
+alter table auth.users add column if not exists phone text;
+alter table auth.users add column if not exists phone_confirmed_at timestamptz;
 
 -- Same contract as Supabase: the subject of the request's JWT claims.
 create or replace function auth.uid() returns uuid
