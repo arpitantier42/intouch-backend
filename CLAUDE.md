@@ -121,6 +121,23 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   Config `APP_LINK_BASE` (default `intouch://`) builds `<base>communities/<id>/invite/<code>`.
   Tests: `invitations_test.go`, pgTAP `invitations.test.sql`. `e.raw` with token ""
   sends no Authorization header.
+- `internal/server/uploads.go` — OP-091 `POST /uploads?purpose&mime&bytes`
+  (`registerUploads`, no DB). Rules in `internal/uploads` (`Lookup(purpose)`
+  → `Policy{Bucket, MaxBytes, MIME→ext, TooLarge, BadType}`; `Check` = 415
+  type first, then 413 size; `NormalizeMIME`). 400 unknown purpose / empty
+  mime / bytes ≤ 0 (`error.fields`); 503 when `Deps.Storage` is nil; 502 on
+  sign failure. Object path `<uid>/<purpose>/<32 hex>.<ext>`; 201 body
+  `{purpose,bucket,path,mime,bytes,max_bytes,upload_url,token,method:"PUT",expires_at}`.
+  `internal/storage` — `Signer` interface (`CreateSignedUploadURL`), HTTP impl
+  with the service-role key; `server.New` builds it when `SUPABASE_URL` +
+  `SUPABASE_SERVICE_ROLE_KEY` are set; tests pass `fakeSigner`. Buckets
+  (avatars 3 MB, community-media 5, post-media 50, chat-media 25, resumes 10)
+  are created by migration `..._storage_buckets.sql` (DO block, no-op without
+  `storage.buckets`); `TestBucketMigrationMatchesPolicy` fails if it drifts
+  from the policy — change both. Later tickets that store `avatar_url`,
+  `logo_url`, `media_url`, `attachment_url`, `resume_url` can call
+  `uploads.Lookup(...).Ext(mime)` to reuse the type rules (e.g. 415 for a
+  non-image logo in updateCommunity, a non-PDF/DOCX resume in job interest).
 - `internal/mailer` — `Mailer` interface (`Send(ctx, Message)`); `mailer.Log` is the
   default until a provider is wired (logs domain + subject only). `Deps.Mailer`.
 - `internal/gotrue` also has `SignInPassword`, `UpdatePassword(token, pw)`,

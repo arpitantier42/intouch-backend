@@ -141,6 +141,27 @@ This repository holds:
     expired, revoked or used up; an existing member gets their membership
     back unchanged). `DELETE /communities/{id}/invitations/{code}` revokes
     (204; 403 for roles that cannot invite);
+  - uploads: `POST /uploads?purpose=&mime=&bytes=` (bearer) checks the file
+    type and size for its purpose and only then returns 201 with a signed
+    upload URL (`upload_url`, valid 2 hours; the app `PUT`s the file there
+    with the returned `mime` as `Content-Type`) and the object's `bucket` and
+    `path`. Rules per purpose:
+
+    | purpose | bucket | max size | types |
+    |---|---|---|---|
+    | `avatar` | `avatars` (public) | 3 MB ("Image too large (max 3MB)") | JPEG, PNG, WebP, HEIC |
+    | `logo`, `cover` | `community-media` (public) | 5 MB | images ("Logo must be an image") |
+    | `post_image` | `post-media` | 5 MB | images |
+    | `post_video` | `post-media` | 50 MB ("Video must be under 50 MB") | MP4, MOV, WebM, 3GP |
+    | `document` | `post-media` | 25 MB | PDF, Word, Excel, PowerPoint, text, CSV |
+    | `chat` | `chat-media` | 25 MB | images, videos, voice notes, documents, vCard contacts |
+    | `resume` | `resumes` | 10 MB | PDF, DOCX ("Resume must be a PDF or DOCX") |
+
+    A type the purpose does not allow is 415, an oversized file 413, an
+    unknown purpose or a missing size 400 — nothing is signed in those cases.
+    The storage buckets enforce the same limits, so an upload that skips this
+    check is still refused. Without `SUPABASE_URL` and
+    `SUPABASE_SERVICE_ROLE_KEY` the endpoint answers 503;
 - a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides
@@ -168,7 +189,7 @@ Environment variables (see `.env.example`):
 | `SUPABASE_URL` | API | Supabase project URL (required in production) |
 | `SUPABASE_JWT_SECRET` | API | project JWT secret, ≥ 32 characters, used to check access tokens (required in production) |
 | `WEBHOOK_API_KEY` | API | key callers send as `X-API-Key` on `/internal/...` routes (required in production) |
-| `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | API | Supabase keys for auth and storage calls |
+| `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | API | Supabase keys for auth and storage calls (the service-role key signs upload URLs) |
 | `EMAIL_API_KEY`, `EMAIL_FROM`, `PUSH_API_KEY`, `GIF_API_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | API | optional provider keys; empty keeps the feature off |
 | `APP_LINK_BASE` | API | prefix of app links in emails, default `intouch://` (invite links are `<base>communities/<id>/invite/<code>`) |
 | `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`, `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` | Supabase CLI | Google OAuth client for "Continue with Google" (`supabase/config.toml`); on a hosted project set them under Authentication → Providers → Google, with redirect URI `<SUPABASE_URL>/auth/v1/callback` and `intouch://auth-callback` as an allowed app redirect |
@@ -212,6 +233,8 @@ The API listens on http://localhost:8080 (`PORT` changes it):
 curl http://localhost:8080/healthz
 curl -X POST http://localhost:8080/auth/sign-up \
   -d '{"full_name":"Asha Rao","email":"asha@example.com","password":"Secret123","confirm_password":"Secret123"}'
+curl -X POST 'http://localhost:8080/uploads?purpose=avatar&mime=image/jpeg&bytes=204800' \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 ## Database

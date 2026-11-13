@@ -4,6 +4,12 @@ project_id = "intouch"
 [db]
 major_version = 17
 
+# Project-wide upload limit; must cover the largest bucket cap (post-media,
+# 50 MiB). Per-bucket caps and MIME types: migration ..._storage_buckets.sql.
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
 # Auth settings the OTP wrapper relies on. The API enforces the 30 s resend,
 # 5 verifies per OTP and 10-minute expiry itself; these keep Supabase Auth
 # consistent with that and act as a backstop for clients that call Auth

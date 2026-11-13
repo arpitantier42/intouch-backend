@@ -11,6 +11,7 @@ import (
 	"github.com/intouch/api/internal/db"
 	"github.com/intouch/api/internal/gotrue"
 	"github.com/intouch/api/internal/mailer"
+	"github.com/intouch/api/internal/storage"
 )
 
 // Deps are the shared dependencies handlers use. DB may be nil in unit tests.
@@ -23,6 +24,10 @@ type Deps struct {
 	Auth gotrue.Client
 	// Mailer sends transactional email; nil means mailer.Log.
 	Mailer mailer.Mailer
+	// Storage signs upload URLs; when nil and SUPABASE_URL and
+	// SUPABASE_SERVICE_ROLE_KEY are set, New builds the HTTP client.
+	// Still nil → POST /uploads answers 503.
+	Storage storage.Signer
 }
 
 // Groups are the route groups endpoint tickets register into:
@@ -57,6 +62,10 @@ func New(deps ...Deps) *gin.Engine {
 		d.Auth = gotrue.New(d.Config.SupabaseURL, d.Config.SupabaseAnonKey)
 	}
 
+	if d.Storage == nil && d.Config.SupabaseURL != "" && d.Config.SupabaseServiceKey != "" {
+		d.Storage = storage.New(d.Config.SupabaseURL, d.Config.SupabaseServiceKey)
+	}
+
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.NoRoute(func(c *gin.Context) { apierr.Abort(c, http.StatusNotFound, "Not found") })
@@ -84,4 +93,5 @@ func register(g Groups, d Deps) {
 	registerMe(g, d)
 	registerAdmission(g, d)
 	registerInvitations(g, d)
+	registerUploads(g, d)
 }
