@@ -118,4 +118,5 @@ func register(g Groups, d Deps) {
 	registerRsvp(g, d)
 	registerPosts(g, d)
 	registerEngagement(g, d)
+	registerReports(g, d)
 }

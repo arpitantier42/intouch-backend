@@ -291,6 +291,14 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   (post/comment/job/muted user) and always 204. `_post_visible(pid)` =
   can_see_post + no block with the author (→ PT404 'Post not found'); reuse it.
   Handler helpers: `bodyObject`, `exactlyOne` (two optional uuid fields), `pathID`.
+- `internal/server/reports.go` — OP-044/045 (`registerReports`, no migration: the
+  RPCs `create_report`/`list_reports` are in `..._feed_engagement.sql`).
+  POST /reports validates reason/target_kind/target_id/details (≤1000) → 400
+  `error.fields` (reason first, 'Choose a reason.'), then `ensureThen`
+  (ensure_my_profile + RPC; reporter = caller, a body `reporter_id` is ignored)
+  → 201 without `reporter_id`. GET /admin/reports?status → `list_reports`
+  (PT403 'Operators only' unless `profiles.is_operator`). Target existence is
+  not checked (any uuid). Tests: `reports_test.go`.
 - `internal/push` — `Sender` interface (`Send(ctx, Notification{UserIDs, Title, Body,
   Data})`); `push.Log` is the default until APNs/FCM and device-token storage
   exist. `Deps.Push`; sends run in a goroutine after commit.

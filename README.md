@@ -402,6 +402,18 @@ This repository holds:
     `{"kind": "mute_author", "muted_user_id"}` — 201; the post or the
     author's posts leave your feed. `DELETE /me/content-filters/{id}` (filter
     id, or the post / user id) — 204, Undo.
+- the reports API:
+  - `POST /reports` with `{"target_kind": "post|comment|thread|job|user",
+    "target_id", "reason": "spam|inappropriate|fake_job|harassment|other",
+    "details"?}` — 201, the stored report with status `open`. The reporter
+    is always the signed-in user and is never returned, so reports stay
+    anonymous to the person reported. 400 when no reason is chosen
+    (`error.fields.reason`), the target is malformed, or details exceed
+    1000 characters.
+  - `GET /admin/reports?status=open|actioned|dismissed` — every report,
+    newest first, for InTouch staff (profiles with `is_operator`, which only
+    a migration or database admin sets); 403 'Operators only' for everyone
+    else.
 - a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides
