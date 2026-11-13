@@ -62,3 +62,31 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
 - `communities.member_count` is maintained by trigger on joined memberships.
 - Usernames: `^[a-z0-9_.]{3,30}$`, unique index on `lower(username)`.
 - Invitation codes: 32 hex chars from `gen_random_bytes(16)` (pgcrypto in `extensions`).
+
+## Auth attempts, devices, notifications (migration `..._auth_devices_notifications.sql`)
+- `auth_attempts` has NO client grants; the service calls these as `service_role`
+  (all SECURITY DEFINER, execute revoked from anon/authenticated):
+  `auth_otp_send(hash)` → otp_ref (PT429 < 30 s since last send);
+  `auth_otp_verify_begin(hash)` → attempt id for the latest OTP (PT401 none sent,
+  PT410 ≥ 10 min old, PT429 after 5 verifies); `auth_password_begin(hash)` →
+  attempt id (PT423 while locked: 10 consecutive failures within 15 min, lock
+  lasts 15 min after the 10th; blocked attempts are not logged);
+  `auth_attempt_succeeded(id)` marks the attempt (a password success resets
+  the failure count); `auth_password_failures(hash)`, `auth_password_locked_until(hash)`,
+  `auth_attempts_purge(interval)`. Begin before calling Supabase Auth, mark on success.
+- Hashes: `internal/authattempt` — `IdentifierHash` (sha256 of lower-cased email
+  or `+91` + 10-digit mobile), `Hash` for device fingerprints. DB checks `^[0-9a-f]{64}$`.
+- `known_devices`: clients select own rows by explicit columns (no `device_hash`
+  grant, so `select *` fails). Service functions: `record_sign_in(user, session,
+  device_hash, user_agent, alert default true)` → `{device_id,new_device,alerted}`
+  (stores a `login_alert` notification when the device hash is new and
+  `login_alerts` is on; the service emails when `alerted`; call it only once the
+  session is issued, i.e. after the SMS code when 2FA is on);
+  `forget_other_devices(user, keep_session)` → removed session ids (pair with
+  Supabase sign-out scope=others); `forget_device(session)`.
+- `notifications`: own rows readable, only `read_at` updatable by clients.
+  Later tickets insert via `notify(user, kind, payload)` (service_role only;
+  kind `^[a-z][a-z0-9_]*$`, payload a JSON object of referenced ids).
+- `switcher_communities()` (authenticated): joined, live communities with role —
+  pending requests excluded.
+- Test helper in `internal/dbtest`: `service[T](d, sql, args...)` runs as service_role.

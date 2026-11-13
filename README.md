@@ -13,6 +13,15 @@ This repository holds:
   in the same transaction), transferring ownership, requesting to join,
   reviewing join requests, and opening and accepting invitations (expiry,
   maximum uses, revocation and open/accept tracking);
+- sign-in security: a log of OTP sends, OTP verifies and password sign-ins
+  (stored only as hashes of the email or phone) with database functions that
+  enforce a 30-second resend wait, at most 5 verifies per code, 10-minute
+  code validity, and a 15-minute lockout after 10 failed passwords in
+  15 minutes (a successful sign-in resets the count);
+- the list of devices each user is signed in from, with new-device login
+  alerts and "sign out of all other devices";
+- the in-app notifications inbox behind the bell, and the list of joined
+  communities shown in the community switcher (pending requests excluded);
 - a Go HTTP service, currently serving a health check.
 
 ## Stack
