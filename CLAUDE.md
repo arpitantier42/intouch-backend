@@ -46,6 +46,7 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `has_community_role(cid, roles[])`, `can_invite(cid)` (per invite_permission),
   `has_membership(cid)` (pending or joined), `shares_community(uid)`, `is_operator()`.
   Community-scoped tables in later tickets should key policies on `is_joined()`.
+  Block helpers: `blocked_user_ids()`, `is_blocked_with(uid)`, `blocked_between(a,b)` (see Social graph).
 - RPC errors use SQLSTATE `PTnnn` (PostgREST maps to HTTP nnn): PT400, PT401,
   PT403, PT404, PT409, PT410, PT422. Constraint errors: 23514 check, 23505 unique
   (username taken → 409), 22001 too long, 42501 privilege/RLS.
@@ -90,3 +91,36 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
 - `switcher_communities()` (authenticated): joined, live communities with role —
   pending requests excluded.
 - Test helper in `internal/dbtest`: `service[T](d, sql, args...)` runs as service_role.
+
+## Social graph (migration `..._social_graph.sql`)
+- Tables `blocks`, `connections`, `follows`, `mentorship_requests`; all FKs to
+  profiles `on delete cascade`, no self rows (CHECK). No client insert grants:
+  inserts go through RPCs. Clients may `delete` own blocks (unblock), either
+  party's connection row (withdraw/cancel/remove → Idle), own follows
+  (unfollow); the recipient may `update (status)` of a mentorship request.
+- `blocks` rows are visible to the blocker only (never reveal a block).
+- **Block filtering — reuse in feed, people, chat:** `blocked_user_ids()`
+  (setof uuid, caller's blocks either direction; e.g.
+  `author_id not in (select public.blocked_user_ids())`),
+  `is_blocked_with(other)` (caller, either way), and service/definer-only
+  `blocked_between(a, b)` (execute revoked from clients). Chat's send/open-DM
+  RPCs must reject with PT403 when `blocked_between(sender, peer)`.
+- `connections.pair_key` is a generated column `least(a,b)::text || ':' ||
+  greatest(a,b)::text` with a unique index; `_pair_key(a,b)` computes it in SQL.
+  States pending|connected|declined; `connection_state(other)` →
+  idle|sent|incoming|connected|blocked (declined reads `sent` to the requester —
+  silent decline — and `idle` to the addressee; being blocked reads `idle`).
+- RPCs (authenticated): `block_user(uid)` → blocks row (idempotent; deletes the
+  pair's connection and both follows; PT400 self, PT404 unknown),
+  `unblock_user(uid)` → bool; `send_connection_request(uid)` (PT403 block,
+  PT409 pending/connected; replaces a request the caller had declined),
+  `respond_to_connection(id, 'accept'|'decline'|'undo')` (addressee only:
+  PT403 requester, PT404 not a party, PT409 bad transition);
+  `follow_user(uid)` (idempotent; PT403 connections-only profile or block),
+  `follow_counts(uid)` → (followers, following);
+  `request_mentorship(uid, topic, message)` (topic
+  career|system_design|referral|resume|grad_school, PT400 missing; PT404
+  unknown/blocked; stores a `mentorship` notification with
+  `{mentorship_request_id, requester_id}`).
+- Embedded Postgres note: the `pgserver` wheel build has no pgcrypto; use the
+  `@embedded-postgres` package (it ships pgcrypto).

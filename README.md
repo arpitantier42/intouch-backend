@@ -22,6 +22,12 @@ This repository holds:
   alerts and "sign out of all other devices";
 - the in-app notifications inbox behind the bell, and the list of joined
   communities shown in the community switcher (pending requests excluded);
+- the social graph: connection requests (one row per pair of people, with
+  accept, ignore, undo and withdraw), blocking (which removes any connection
+  and follows and leaves the pair unconnected after an unblock, and is never
+  revealed to the blocked person), a blocked-accounts list, one-way follows of
+  public profiles with follower and following counts, and mentorship requests
+  (a topic is required; the recipient gets a notification);
 - a Go HTTP service, currently serving a health check.
 
 ## Stack
