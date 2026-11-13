@@ -45,7 +45,13 @@ This repository holds:
   community admins can read (members see the last 4 account digits), and
   contributions recorded once per gateway payment, so a repeated payment
   webhook never counts twice;
-- a Go HTTP service, currently serving a health check.
+- a Go HTTP service, currently serving a health check, with the shared
+  plumbing every endpoint uses: Supabase access-token validation (requests
+  without a valid session get 401), an API-key guard for webhooks, queries
+  that run as the signed-in user so the database's row level security decides
+  what they may read or change, and one JSON error format;
+- a deploy pipeline that runs the tests, applies the migrations, and refuses
+  to deploy when any table has row level security turned off.
 
 ## Stack
 
@@ -62,7 +68,17 @@ Environment variables (see `.env.example`):
 | variable | used by | meaning |
 |---|---|---|
 | `PORT` | API | port to listen on, default `8080` |
+| `APP_ENV` | API | `production` makes missing required settings fatal at start-up |
+| `DATABASE_URL` | API, deploy | Postgres URL of a login that can switch to the `anon`, `authenticated` and `service_role` roles (required in production) |
+| `SUPABASE_URL` | API | Supabase project URL (required in production) |
+| `SUPABASE_JWT_SECRET` | API | project JWT secret, ≥ 32 characters, used to check access tokens (required in production) |
+| `WEBHOOK_API_KEY` | API | key callers send as `X-API-Key` on `/internal/...` routes (required in production) |
+| `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | API | Supabase keys for auth and storage calls |
+| `EMAIL_API_KEY`, `EMAIL_FROM`, `PUSH_API_KEY`, `GIF_API_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | API | optional provider keys; empty keeps the feature off |
 | `TEST_DATABASE_URL` | tests | superuser Postgres URL; tests create and drop their own databases |
+| `SUPABASE_PROJECT_REF`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `DEPLOY_COMMAND` | deploy | target project and the command that rolls out the built image (`$IMAGE`) |
+
+Copy `.env.example` to `.env` and fill it in; secrets are never logged.
 
 ## Install
 
@@ -99,10 +115,10 @@ Unit tests (database tests are skipped without a database):
 go test ./...
 ```
 
-Database schema and policy tests against any Postgres 17 superuser URL:
+Database schema, policy and access-boundary tests against any Postgres 17 superuser URL:
 
 ```sh
-TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres go test -count=1 ./internal/dbtest/...
+TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres go test -count=1 ./internal/dbtest/... ./internal/db/...
 ```
 
 The pgTAP suites in `supabase/tests/database` also run under the Supabase CLI:
@@ -115,4 +131,33 @@ supabase test db
 
 ```sh
 go build -o bin/api ./cmd/api
+```
+
+A container image (needs Docker):
+
+```sh
+docker build -t intouch-api .
+```
+
+## Deploy
+
+Check that every table in a database has row level security on (exits 1 and
+names the tables otherwise):
+
+```sh
+go run ./cmd/rlscheck "$DATABASE_URL"
+```
+
+Full pipeline — vet and unit tests, database tests, `supabase db push`, the
+row-level-security check on the deployed database, image build, then
+`DEPLOY_COMMAND`. Any failing step stops the deploy:
+
+```sh
+./scripts/deploy.sh
+```
+
+Local rehearsal without touching any remote system (needs `TEST_DATABASE_URL`):
+
+```sh
+DRY_RUN=1 ./scripts/deploy.sh
 ```

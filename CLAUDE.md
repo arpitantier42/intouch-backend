@@ -10,8 +10,32 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
 - Supabase: Postgres 17, Auth, Storage, Realtime. SQL migrations in `supabase/migrations`.
 
 ## Layout
-- `cmd/api/main.go` — HTTP entry point (`PORT`, default 8080).
-- `internal/server` — Gin router (`server.New()`); register routes here.
+- `cmd/api/main.go` — HTTP entry point: `config.Load()`, opens `db.Open(DATABASE_URL)`,
+  `server.New(server.Deps{...})`. `APP_ENV=production` makes missing settings fatal.
+- `cmd/rlscheck` — deploy gate: exits 1 if any public table has RLS off (`internal/rlsgate`).
+- `internal/server` — Gin router. `server.New(deps)` builds route groups and calls
+  `register(g Groups, d Deps)`: add endpoints there (or a `registerX` it calls) on
+  `g.Public` (no auth; a sent bearer must still be valid), `g.User` (bearer required → 401),
+  `g.Internal` (`/internal`, `X-API-Key` = `WEBHOOK_API_KEY`). `server.New()` with no deps still works.
+- `internal/config` — every env setting/provider secret (`Config`, `Validate`,
+  `PaymentsEnabled`; `String()` redacts). Add new secrets here and to `.env.example`.
+- `internal/auth` — HS256 Supabase access-token check (`Verifier.Verify`: signature,
+  exp, role=authenticated, aud contains authenticated), middleware `RequireUser`,
+  `OptionalUser`, `RequireAPIKey`; `auth.FromContext(c)` → `*Claims` (`Subject`,
+  `SessionID`, `Raw` payload). `auth.Sign(secret, claims)` mints tokens for tests.
+- `internal/db` — **every request query runs through** `d.AsUser(ctx, claims.Raw, fn)`
+  (role `authenticated`, `request.jwt.claims` = the JWT, so RLS/`auth.uid()` decide),
+  `d.AsAnon` (public endpoints) or `d.AsService` (service_role functions: auth
+  wrappers, webhooks). Never query the pool directly in handlers: the pool login bypasses RLS.
+- `internal/apierr` — shared error mapping and body `{"error":{"status","code","message"}}`.
+  `apierr.Write(c, err)`: PTnnn → nnn with the RPC message; 23514/23502/22001/22P02/… → 400;
+  23505 → 409; 23503 → 404; 42501 → 403; 40001/40P01 → 409; pgx.ErrNoRows → 404;
+  `*apierr.Error` (`apierr.New(415, "...")`) → its own status; else 500 (generic text).
+  `apierr.Abort(c, status, msg)` for handler-level validation.
+- `scripts/deploy.sh` — deploy pipeline (vet/unit → DB tests → `supabase db push` →
+  rlscheck on the deployed DB → docker build → `DEPLOY_COMMAND`); `DRY_RUN=1` is local-only.
+  `Dockerfile` builds `api` + `rlscheck` (distroless). CI (`.github/workflows`) is not in
+  the repo: a person adds a job that runs `make deploy-dry-run` with a Postgres service.
 - `internal/profile` — profile field validation mirroring the DB CHECKs.
 - `internal/dbtest` — DB test harness + schema/policy tests (`dbtest.New(t)`,
   `d.NewUser`, `d.As(uid, fn)` runs as role `authenticated` with that JWT sub,
@@ -27,8 +51,11 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
 
 ## Commands
 - Unit tests: `go test ./...` (DB tests skip without `TEST_DATABASE_URL`).
-- DB tests: `TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres go test -count=1 ./internal/dbtest/...`
-  (superuser URL; each test creates and drops a database).
+- DB tests: `TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres go test -count=1 ./internal/dbtest/... ./internal/db/...`
+  (superuser URL; each test creates and drops a database). Packages run in
+  parallel, so the stub tolerates concurrent role creation. Endpoint HTTP tests
+  can use `dbtest.New(t)` + `&db.DB{Pool: td.Pool}` + `auth.Sign` (see `internal/db/db_test.go`).
+- Deploy: `make deploy` / `make deploy-dry-run`; gate alone: `make rls-check DATABASE_URL=...`.
 - Build: `go build -o bin/api ./cmd/api`. Run: `go run ./cmd/api`.
 - A Makefile mirrors these (`make test`, `make test-db`, `make build`).
 - No local Postgres? `npm pack @embedded-postgres/linux-x64@17.5.0-beta.15`

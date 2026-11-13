@@ -2,17 +2,22 @@
 -- rely on, so they can be applied to a plain Postgres (local tests, CI without
 -- the Supabase CLI). Never apply this to a real Supabase project.
 
+-- Roles are cluster-wide and test databases are built in parallel (go test
+-- runs packages concurrently), so a concurrent create is tolerated.
 do $$
+declare
+  r text;
 begin
-  if not exists (select 1 from pg_roles where rolname = 'anon') then
-    create role anon nologin noinherit;
-  end if;
-  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
-    create role authenticated nologin noinherit;
-  end if;
-  if not exists (select 1 from pg_roles where rolname = 'service_role') then
-    create role service_role nologin noinherit bypassrls;
-  end if;
+  foreach r in array array['anon', 'authenticated', 'service_role'] loop
+    if not exists (select 1 from pg_roles where rolname = r) then
+      begin
+        execute format('create role %I nologin noinherit%s', r,
+          case when r = 'service_role' then ' bypassrls' else '' end);
+      exception when duplicate_object or unique_violation then
+        null;
+      end;
+    end if;
+  end loop;
 end
 $$;
 
