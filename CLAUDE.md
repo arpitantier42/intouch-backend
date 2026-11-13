@@ -257,6 +257,24 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `confirmation_email`, mails the JWT `email` claim (`tokenEmail`) in a
   goroutine. Tests: `rsvp_test.go` (`newRsvpEnv`, `newEvent`, `fillSeats`,
   last-seat race), pgTAP `rsvp.test.sql`.
+- `internal/server/events.go` — OP-062..067, 070 (`registerEvents`), migration
+  `..._events_api.sql`, tests `events_test.go` (`createEventAs`, `listIDs`).
+  RPCs (definer): `_event_json(e)` = row without join_url + item_kind,
+  join_url (creator/confirmed seat), my_rsvp, badge ('Created by you' else
+  `_rsvp_badge`), going_count, seats_left(_label), duration_minutes, mine,
+  post_id — reuse it. `list_events(cid, tab, q)` (PT403 'Members only'; tab
+  upcoming(default)|event|raise|my_rsvps|created|paid; raise tab returns raise
+  cards without payout fields; q = title/venue/tag ilike), `create_event(cid,
+  title, …, payment_url)` (PT400 composer messages; inserts event + post kind
+  'event' body=title + target), `get_event(id)` (+ host, attendees),
+  `event_landing(id)` (anon-executable; PT403 private community; no links),
+  `update_event(id, patch)` (jsonb_populate_record over whitelisted keys;
+  CHECKs → 400), `delete_event(id)` (soft-deletes event + post, drops pending
+  reminders, `notify(... 'event_deleted')` going attendees, returns
+  `notified[]` for the push). Handler validates the composer first (400
+  `error.fields`, `numbersMsg`). Remind me = RLS insert into `reminders`
+  (default push at start−1h; repeat returns the existing row; 404 not visible).
+  The raises ticket can extend `list_events`' raise branch.
 - `internal/server/posts.go` — OP-029..033 (`registerPosts`), migration
   `..._posts_api.sql`, tests `posts_test.go` (`postAs`, `feedIDs`, `setRole`).
   `list_feed(cid, chip, type, since, sort, cursor_at, cursor_id, newer_than,

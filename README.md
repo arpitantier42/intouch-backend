@@ -332,6 +332,32 @@ This repository holds:
       pin and stars.
     - `PUT /messages/{id}/marks?action=react|unreact|star|unstar|pin|unpin`
       (`{"emoji"}` for react; 409 on a deleted message).
+- events (bearer unless noted):
+  - `GET /communities/{id}/events?tab=upcoming|event|raise|my_rsvps|created|paid&q=…`
+    — the community's events (default: not yet ended), each with `badge`
+    ("Created by you", "Going", "Payment pending", "Not sure", …),
+    `going_count`, `seats_left_label` and `duration_minutes`; `q` matches the
+    title, venue or a tag; the raise tab lists the community's raises.
+    403 not a member.
+  - `POST /communities/{id}/events` with `{"title", "description",
+    "cover_url", "starts_at", "ends_at", "format":"in_person|online", "venue",
+    "join_url", "tags":[…], "speaker", "seat_cap", "is_paid", "price_minor",
+    "payment_url"}` — publishes the event and its feed post in one step (end
+    defaults to start + 2 hours). 400 with `error.fields`: "Add an event
+    title", "Fill date, time and location", "End must be after start", "Seats
+    and price must be valid positive numbers", "Add an http(s) payment link".
+  - `GET /events/{id}` — detail with `host` and `attendees`; the join link only
+    for the host and confirmed seats. 403 not a member, 404 unknown/deleted.
+  - `GET /events/{id}/join` (no sign-in) — the shareable preview: title, when,
+    duration, where ("Online" or the venue), going count, host and community.
+    It never contains the join or payment link and grants no access. 403
+    private community, 404 unknown.
+  - `PATCH /events/{id}` — the host edits fields including `live_state`
+    (scheduled|live|ended); 403 for anyone else.
+  - `DELETE /events/{id}` — the host deletes the event (and its feed post);
+    going attendees get an in-app notification and a push. 403 for anyone else.
+  - `POST /events/{id}/reminders` with optional `{"channel":"push|email",
+    "send_at"}` — "Remind me" (default: push 1 hour before start); 201.
 - event RSVPs (bearer):
   - `PUT /events/{id}/rsvp` with `{"status":"going|not_sure|declined",
     "payment_status":"pay_later|verification_pending", "decline_reason":
