@@ -82,6 +82,13 @@ This repository holds:
     once (401), not only when they expire.
   - `GET /me/devices` lists the devices the user is signed in on, with
     `current: true` on the caller's;
+- the notifications inbox (bearer): `GET /me/notifications` lists the
+  user's own notifications, newest first (`id`, `user_id`, `kind`, `payload`
+  with the referenced ids, `read_at` — null while unread — and `created_at`);
+  an empty inbox is `[]`. The `X-Unread-Count` header carries the unread total
+  for the bell badge. Optional `unread=true` lists only unread ones, `limit`
+  (1–100, default 50) and `before=<created_at of the last row seen>` page
+  through older ones; other values answer 400;
 - the signed-in user's profile and account:
   - `GET /me` returns the profile with `onboarding_complete` and
     `deletion_requested_at`, so the app can route to Onboarding or Home and
