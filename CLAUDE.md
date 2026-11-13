@@ -160,5 +160,46 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   if missing on plain Postgres); Realtime applies the RLS per subscriber.
   Reconnect catch-up is `created_at > after` on messages.
 
+## Events and raises (migration `..._events_raises.sql`)
+- Tables `events`, `rsvps`, `reminders`, `raises`, `contributions`. No client
+  inserts on events/rsvps/raises/contributions: the RPCs (later tickets,
+  SECURITY DEFINER or service_role) insert them. CHECK helpers
+  `_is_http_url(text)`, `_is_string_array(jsonb)` — reuse for jobs' apply_url.
+- `events`: CHECKs = publish rules (non-blank title, ends > starts, in_person
+  needs venue, online needs http(s) join_url, seat_cap > 0, paid ⇒ price > 0
+  and http(s) payment_url, free ⇒ both null; `events_seats_check`
+  confirmed_count ≤ seat_cap) → 23514 (map to 400). Select = joined members,
+  not deleted, **column-granted without `join_url`** (no `select *`); read it
+  via `event_join_url(id)` (creator or confirmed seat). Creator may `update`
+  the client columns; creator_id/community/confirmed_count/deleted_at/
+  created_at are server-set. `seats_left(id)` → "N seats left" (null = unlimited).
+  `can_see_event(id)` is the access helper.
+- `rsvps` (unique event,user): just insert/upsert `status`, `payment_status`,
+  prefs; triggers derive `seat_confirmed` (going and free, or verified), force
+  payment_status `none` on free events (`pay_later` for paid going without
+  one), keep `confirmed_count` and raise **PT409 'Event full'** (AFTER trigger
+  locks the event row `for no key update`; upserts are safe). Deleted event →
+  PT404. Verify payment = `update rsvps set payment_status='verified'`.
+- Reminders: a going RSVP schedules push at start−1 day and −1 hour
+  (`remind_push`) and a day-of email at 08:00 IST (or start−1 h if earlier)
+  (`remind_email`); unique (user,event,channel,send_at); leaving going or
+  turning a pref off removes pending ones; changing `starts_at` reschedules.
+  Clients insert own "Remind me" rows (`event_id, channel, send_at`; user_id
+  defaults to auth.uid()) and delete pending ones. Scheduler:
+  `claim_due_reminders(limit)` (service_role) marks due rows sent and returns them.
+- `raises`: base table denied to clients (restrictive `using (false)` policy,
+  no grants). Clients read `raises_masked` (security_barrier view, owner
+  rights, filters `can_see_raises(community)` = joined): `upi_id`,
+  `account_number`, `ifsc`, `qr_url` null unless `can_view_payout(raise)`
+  (organiser or owner/admin); plus `payout_visible`. Trigger normalises IFSC
+  to upper case, derives `account_last4`, zeroes totals on insert, and rejects
+  a past `open_until` with 23514. upi ⇒ upi_id only; bank ⇒ account+IFSC only;
+  IFSC `^[A-Z0-9]{11}$` (too long → 22001).
+- `contributions`: unique `gateway_payment_id`. Webhook calls
+  `capture_contribution(raise, donor, amount, payment_id)` (service_role) →
+  `(contribution_id, applied)`; totals move once per capture (trigger),
+  `donor_count` counts distinct donors. Send the receipt only when `applied`,
+  then `mark_receipt_sent(id)`. Donor and organiser/admins can select.
+
 - Embedded Postgres note: the `pgserver` wheel build has no pgcrypto; use the
   `@embedded-postgres` package (it ships pgcrypto).

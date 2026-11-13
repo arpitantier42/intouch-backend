@@ -36,6 +36,15 @@ This repository holds:
   stars, shared reactions and a call log. Only participants who are still
   joined to the community can read a conversation, and new rows are published
   to Supabase Realtime for live delivery;
+- the events and fundraising data store: community events (a paid event needs
+  a price and an http(s) payment link; the join link is shown only to the
+  host and to confirmed attendees), RSVPs with seat-cap enforcement (the last
+  seat goes to exactly one person; "Event full" after that), reminders
+  scheduled from RSVP preferences (push 1 day and 1 hour before, a day-of
+  email), raises with UPI or bank payout details that only the organiser and
+  community admins can read (members see the last 4 account digits), and
+  contributions recorded once per gateway payment, so a repeated payment
+  webhook never counts twice;
 - a Go HTTP service, currently serving a health check.
 
 ## Stack
