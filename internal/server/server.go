@@ -105,6 +105,7 @@ func register(g Groups, d Deps) {
 	registerAuthOTP(g, d)
 	registerAuthSessions(g, d)
 	registerMe(g, d)
+	registerCommunities(g, d)
 	registerAdmission(g, d)
 	registerInvitations(g, d)
 	registerUploads(g, d)

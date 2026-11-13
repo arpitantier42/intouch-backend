@@ -91,6 +91,33 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID/SECRET`; app redirect `intouch://auth-callback`.
   The test stub's `auth.users` has `phone`, `phone_confirmed_at`. Tests: `me_test.go`
   (`googleToken`, `meUser`).
+- `internal/server/communities.go` — OP-012..015, 023, 024 (`registerCommunities`),
+  migration `..._communities_api.sql`, tests `communities_test.go`, pgTAP
+  `communities_api.test.sql`. `create_community` (same signature) now
+  validates (PT400 name / location_type / city ∉ `community_cities()` (37,
+  case-insensitive, stored in catalogue spelling) / visibility), takes
+  advisory xact locks on the creation_key and the handle base (double-tap →
+  one row; the handler answers 200 when `created_at < now()`, i.e. the key
+  existed). `community_categories()` = jsonb catalogue {category, mode
+  fixed|limited|open, primary, options}; `_category_interests(cat, arr)`
+  applies it (primary first, PT400 unlisted for fixed/limited);
+  `_clean_string_array` trims/dedupes. `update_community(cid, patch jsonb)`
+  → row + `questions`: owner/admin for name, category, interests, emoji,
+  cover_gradient, logo_url, cover_url, rules; owner only (PT403) for
+  visibility, invite_permission, join_approval, open_to_collaborate,
+  location_type, city, questions (full list; items with an existing `id`
+  are updated so answers survive). Handler 415s a logo/cover URL whose
+  extension isn't in the `uploads` logo/cover policy. `community_overview(cid,
+  invite_code)` (PT404 deleted/unknown, PT403 'Invitation required') →
+  row + membership_state, role, role_badge, content_access, join_action
+  (join|pending|accept_invite|null), whats_inside counts, questions,
+  show_welcome (stamps welcome_seen_at), checklist {items, percent_complete}
+  for the owner. `list_communities(view, q, limit)` → array of
+  `_community_card(c)` (row + membership_state, role, role_badge).
+  `delete_community(cid, confirm_name)` (PT400 mismatch, PT403 non-owner;
+  keeps first deleted_at), `restore_community(cid)` (PT410 after 14 days),
+  service-only `communities_due_for_purge(limit)`. `_community_json(c)` =
+  row + questions (owner/admin only).
 - `internal/server/admission.go` — OP-016..022 (`registerAdmission`), migration
   `..._admission_roster.sql`. Handlers are thin: parse input, call one RPC as the
   user, map PTnnn. RPCs: `request_join` (handler first runs `ensure_my_profile`),

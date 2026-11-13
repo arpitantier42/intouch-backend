@@ -131,6 +131,42 @@ This repository holds:
     when nothing is pending). The database function
     `accounts_due_for_purge()` lists accounts whose 14 days are over, for
     the scheduled purge job;
+  - communities (bearer token required):
+    `POST /communities` with `{"name", "location_type": "place|online",
+    "city", "visibility": "private|public", "creation_key": "<uuid>"}`
+    creates a community with the caller as its owner (201; private unless
+    set, default emoji and gradient, a unique lowercase handle of up to 40
+    characters with `-2`, `-3`… on collisions). Repeating the same
+    `creation_key` returns the existing community with 200. Place-based
+    communities need one of 37 Indian cities ("Enter a city or area.");
+    a blank name answers 400 "Enter a community name.".
+    `PATCH /communities/{id}` updates category, interests (deduplicated;
+    each category's primary interest is added; Education, Association and
+    Sports & Play accept only their listed interests, Fitness & Gym only its
+    fixed chips, Club, Event Organizer and Other also accept custom ones),
+    emoji, cover gradient, logo and cover (images only, else 415), rules (at
+    least one), join questions (short/long text, single/multi choice with
+    options, number, date, URL), visibility, invite permission, join
+    approval and "open to collaborate". Admins may change the profile and
+    rules; only the owner may change privacy, admission settings and
+    questions (403).
+    `GET /communities/{id}?invite_code=` returns the overview: community
+    details, your membership state and role badge, "What's inside" counts
+    (posts this week, upcoming events, active chats, groups, new members —
+    counts only), the join action, and for the owner a five-step setup
+    checklist with a percentage. A private community without membership or
+    a valid invite code answers 403 "Invitation required"; unknown or
+    deleted communities answer 404. The first view after joining reports
+    `show_welcome: true` once.
+    `GET /communities?view=mine|trending|popular|recommended|search&q=`
+    lists your joined communities ("You manage" / "Member of"), or public
+    communities only for the other views (recommended leaves out ones you
+    belong to); `q` matches name, category or interest.
+    `DELETE /communities/{id}?confirm_name=<exact name>` soft-deletes
+    (owner only, 202 with the purge date 14 days later), and
+    `POST /communities/{id}/restore` brings it back intact within 14 days
+    (410 afterwards). `communities_due_for_purge()` lists the communities
+    past their grace period for the scheduled purge job;
   - community admission and roster management (bearer token required):
     `POST /communities/{id}/join-requests` asks to join a public community
     with answers to its questions (201 pending; 400 blank required answer;
