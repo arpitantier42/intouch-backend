@@ -12,6 +12,7 @@ import (
 	"github.com/intouch/api/internal/gifs"
 	"github.com/intouch/api/internal/gotrue"
 	"github.com/intouch/api/internal/mailer"
+	"github.com/intouch/api/internal/payments"
 	"github.com/intouch/api/internal/push"
 	"github.com/intouch/api/internal/storage"
 )
@@ -35,6 +36,9 @@ type Deps struct {
 	// Gifs searches the GIF provider; when nil and GIF_API_KEY is set, New
 	// builds the GIPHY client. Still nil → GET /gifs answers 503.
 	Gifs gifs.Searcher
+	// Payments is the contribution gateway; when nil and the Razorpay keys
+	// are set, New builds the Razorpay client. Still nil → contributions 503.
+	Payments payments.Gateway
 }
 
 // Groups are the route groups endpoint tickets register into:
@@ -80,6 +84,10 @@ func New(deps ...Deps) *gin.Engine {
 		d.Gifs = gifs.New(d.Config.GIFAPIKey)
 	}
 
+	if d.Payments == nil && d.Config.PaymentsEnabled() {
+		d.Payments = payments.NewRazorpay(d.Config.RazorpayKeyID, d.Config.RazorpayKeySecret)
+	}
+
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.NoRoute(func(c *gin.Context) { apierr.Abort(c, http.StatusNotFound, "Not found") })
@@ -120,4 +128,6 @@ func register(g Groups, d Deps) {
 	registerEngagement(g, d)
 	registerReports(g, d)
 	registerEvents(g, d)
+	registerRaises(g, d)
+	registerWebhooks(g, d)
 }

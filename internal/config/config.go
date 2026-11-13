@@ -25,6 +25,7 @@ type Config struct {
 	// that need them answer 503 (or skip the side effect).
 	EmailAPIKey       string // EMAIL_API_KEY
 	EmailFrom         string // EMAIL_FROM
+	EmailWebhook      string // EMAIL_WEBHOOK_SECRET: HMAC key of the bounce webhook
 	PushAPIKey        string // PUSH_API_KEY
 	GIFAPIKey         string // GIF_API_KEY
 	RazorpayKeyID     string // RAZORPAY_KEY_ID
@@ -53,6 +54,7 @@ func FromLookup(get func(string) string) Config {
 		WebhookAPIKey:      get("WEBHOOK_API_KEY"),
 		EmailAPIKey:        get("EMAIL_API_KEY"),
 		EmailFrom:          get("EMAIL_FROM"),
+		EmailWebhook:       get("EMAIL_WEBHOOK_SECRET"),
 		PushAPIKey:         get("PUSH_API_KEY"),
 		GIFAPIKey:          get("GIF_API_KEY"),
 		RazorpayKeyID:      get("RAZORPAY_KEY_ID"),

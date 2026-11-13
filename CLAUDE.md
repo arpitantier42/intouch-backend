@@ -275,6 +275,35 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `error.fields`, `numbersMsg`). Remind me = RLS insert into `reminders`
   (default push at start−1h; repeat returns the existing row; 404 not visible).
   The raises ticket can extend `list_events`' raise branch.
+- `internal/server/raises.go` — OP-071..074 (`registerRaises`), migration
+  `..._raises_api.sql`, tests `raises_test.go` (`newRaiseEnv(t, gw)`,
+  `fakeGateway`, `e.webhook`, `createRaise`). RPCs (definer): `_inr(minor)`
+  ('₹1,00,000'), `_raise_json(raises_masked row)` = masked row +
+  progress_percent (≤100), raised/goal/progress_label, is_open, status
+  open|closed|ended, mine, post_id; `_visible_raise(id)` (PT404 unknown/not
+  joined/blocked) — reuse both. `create_raise(cid, title, …, qr_url)` (PT400
+  messages, inserts raise + post kind raise + target), `get_raise`,
+  `close_raise` (PT403 non-organiser, even owner), `start_contribution(id,
+  amount, order_id)` (null order = check only; PT409 closed/expired; else
+  inserts a 'created' contribution keyed by the gateway ORDER id). Handler
+  adds `support` {enabled, mode gateway|unavailable|closed, message}. Service:
+  `capture_gateway_payment(key, raise, donor, amount)` (stored order row
+  wins, else notes; empty = unknown), `contribution_receipt(id)`,
+  `mark_invitations_failed_for_email(email)`, `close_expired_raises(limit)`
+  (for the scheduler, REQ-145). `list_events`' raise tab is unchanged (no labels).
+- `internal/payments` — the only gateway adapter (RSK-005: Razorpay shapes
+  are guessed). `Gateway` (`CreateOrder`, `Provider`), `Razorpay` HTTP impl
+  (basic auth, POST /orders), `Sign`/`VerifySignature` (hex HMAC-SHA256),
+  `ParseRazorpayWebhook` → `Payment` (`Key()` = order id else payment id,
+  `Captured()`). `Deps.Payments` nil → contributions 503; `server.New` builds
+  Razorpay when `PaymentsEnabled()`.
+- `internal/server/webhooks.go` — OP-093 `POST /internal/webhooks/:provider`
+  (API key + HMAC of raw body: razorpay `X-Razorpay-Signature` /
+  RAZORPAY_WEBHOOK_SECRET, email `X-Webhook-Signature` / EMAIL_WEBHOOK_SECRET;
+  unset secret = 401; unknown provider 404). Valid deliveries always 200
+  `{status: applied|duplicate|ignored}`. Receipt mailed in a goroutine only
+  when `applied`, then `mark_receipt_sent`. Bounce body: object or list of
+  `{type|event, invitation_id | metadata.invitation_id, email|recipient}`.
 - `internal/server/posts.go` — OP-029..033 (`registerPosts`), migration
   `..._posts_api.sql`, tests `posts_test.go` (`postAs`, `feedIDs`, `setRole`).
   `list_feed(cid, chip, type, since, sort, cursor_at, cursor_id, newer_than,

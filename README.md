@@ -332,6 +332,34 @@ This repository holds:
       pin and stars.
     - `PUT /messages/{id}/marks?action=react|unreact|star|unstar|pin|unpin`
       (`{"emoji"}` for react; 409 on a deleted message).
+- raises (bearer):
+  - `POST /communities/{id}/raises` with `{"title", "description",
+    "goal_minor" (paise; omit for an open amount), "open_until",
+    "visibility":"public|private", "invite_enabled", "receiver_name",
+    "payout_mode":"upi|bank", "upi_id" | "account_number" + "ifsc", "qr_url"}`
+    — creates the raise and its feed post (201). 400 with `error.fields`:
+    "Add a title", "Goal can't be negative", "Open until must be in the
+    future", "Add the IFSC code", "IFSC must be 11 characters", …; 403 not a member.
+  - `GET /raises/{id}` — the raise with `progress_percent` (capped at 100),
+    `progress_label` ("₹25,000 of ₹1,00,000 goal"), `is_open`, `status`
+    (open|closed|ended) and `support` {enabled, mode gateway|unavailable|closed,
+    message}. Payout details (UPI ID, account number, IFSC, QR) are returned
+    only to the organiser and community owner/admins; members get
+    `account_last4`. 404 not visible.
+  - `POST /raises/{id}/close` — organiser only (403 otherwise).
+  - `POST /raises/{id}/contributions` with `{"amount_minor"}` — 409 when the
+    raise is closed or past its open-until date; 503 "Contributions aren't
+    available until payments are connected." until the Razorpay keys are set;
+    then 201 with a `checkout` {provider, key_id, order_id, amount_minor,
+    currency} for the gateway's checkout SDK.
+- webhooks (`X-API-Key` plus the provider's HMAC-SHA256 hex signature of the
+  raw body; 401 otherwise):
+  - `POST /internal/webhooks/razorpay` (`X-Razorpay-Signature`) —
+    `payment.captured` / `order.paid` add the contribution to the raise once,
+    however often the event is delivered, and email the donor a receipt.
+  - `POST /internal/webhooks/email` (`X-Webhook-Signature`) — bounce events
+    (`{"type":"bounce", "metadata":{"invitation_id"}}` or `{"email"}`, one
+    object or a list) mark the matching email invitations failed.
 - events (bearer unless noted):
   - `GET /communities/{id}/events?tab=upcoming|event|raise|my_rsvps|created|paid&q=…`
     — the community's events (default: not yet ended), each with `badge`
@@ -468,7 +496,7 @@ Environment variables (see `.env.example`):
 | `SUPABASE_JWT_SECRET` | API | project JWT secret, ≥ 32 characters, used to check access tokens (required in production) |
 | `WEBHOOK_API_KEY` | API | key callers send as `X-API-Key` on `/internal/...` routes (required in production) |
 | `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | API | Supabase keys for auth and storage calls (the service-role key signs upload URLs) |
-| `EMAIL_API_KEY`, `EMAIL_FROM`, `PUSH_API_KEY`, `GIF_API_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | API | optional provider keys; empty keeps the feature off |
+| `EMAIL_API_KEY`, `EMAIL_FROM`, `EMAIL_WEBHOOK_SECRET`, `PUSH_API_KEY`, `GIF_API_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | API | optional provider keys; empty keeps the feature off (raise contributions answer 503 until both Razorpay keys are set; a webhook whose secret is unset answers 401) |
 | `APP_LINK_BASE` | API | prefix of app links in emails, default `intouch://` (invite links are `<base>communities/<id>/invite/<code>`) |
 | `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`, `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` | Supabase CLI | Google OAuth client for "Continue with Google" (`supabase/config.toml`); on a hosted project set them under Authentication → Providers → Google, with redirect URI `<SUPABASE_URL>/auth/v1/callback` and `intouch://auth-callback` as an allowed app redirect |
 | `TEST_DATABASE_URL` | tests | superuser Postgres URL; tests create and drop their own databases |
