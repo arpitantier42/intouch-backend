@@ -188,6 +188,34 @@ This repository holds:
     An ignored request still shows as pending to its sender. Connection
     changes are published to Supabase Realtime (`connections` table), so
     both people's screens update without a reload;
+  - people (bearer): `GET /people?mode=connections|members|suggested|invitable
+    &community_id=&q=&filter=everyone|same_city|near_me|same_company&limit=`
+    returns person cards with `connection_state`. `members` and `invitable`
+    need `community_id`; `connections` with a community lists only
+    connections who are members there (new chat, sharing); `suggested` ranks
+    people you share a community with (not yet connected or pending) by
+    shared communities, city, company and skills; `invitable` lists people
+    not yet in the community (inviters only). `q` matches name, username,
+    headline, company and skills. City and company filters use your profile
+    (no location access); with no city or company set they return nothing.
+    Blocked people (either way), yourself and people who turned off "appear
+    in search" are never listed (except in your own connections);
+  - member profile (bearer): `GET /users/{id}` returns the profile with
+    `shared_communities` (only communities you both belong to),
+    `mutual_connections {count, items}`, `connection_state`, `connection_id`,
+    `primary_action` (`message` once connected, otherwise `connect`,
+    `pending` or `respond`) and `follow {followers, following, is_following,
+    can_follow}`. City is left out when hidden; a connections-only profile
+    shows only its card (`limited: true`) to non-connections. 404 when either
+    person blocked the other or you share no community;
+  - mentorship (bearer): `POST /users/{id}/mentorship-requests {"topic",
+    "message"}` with topic `career|system_design|referral|resume|grad_school`
+    (400 without one) stores the request and notifies the recipient (in-app
+    notification and push);
+  - follow (bearer): `PUT /users/{id}/follow` follows a public profile (200,
+    repeat is a no-op; 403 connections-only profile or a block);
+    `DELETE /users/{id}/follow` unfollows (204). The app keeps Follow hidden
+    behind its own feature flag for now;
   - chat conversations (bearer; all scoped to one community):
     - `GET /communities/{id}/threads?filter=all|unread|groups|calls&q=` lists
       the caller's conversations in that community only, most recent first,

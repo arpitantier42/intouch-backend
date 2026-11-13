@@ -187,6 +187,26 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `blocked_id` / `addressee_id` (or `user_id`). `_profile_card(uid)` (service/definer
   only) is the small profile JSON — reuse it. `connections` is in publication
   `supabase_realtime`. Tests: `social_test.go` (`connState`).
+- `internal/server/people.go` — OP-081, 086..089 (`registerPeople`), migration
+  `..._people.sql`. `search_people(mode, cid, q, filter, limit)` → jsonb array of
+  person cards (+ `connection_state`; city null when hidden). Modes:
+  connections (scoped to joined members when cid given), members (cid required),
+  suggested (no pending/connected row, shares a live community, ranked
+  3×shared communities + 2 city + 2 company + shared skills), invitable (cid
+  required, `can_invite`, excludes joined). Always excludes self + blocks;
+  `appear_in_search=false` excluded except in connections. Filters near_me =
+  same_city (profile city, hidden cities skipped); no own city/company → [].
+  PT400 mode/filter/missing cid, PT403 not joined / cannot invite.
+  `member_profile(uid)` → PT404 unknown, block either way, or no shared live
+  community (self allowed); `limited` card for connections-only non-connections;
+  `city` key omitted when hidden; adds shared_communities, mutual_connections,
+  connection_state, connection_id, primary_action, can_message, follow{}.
+  Helpers (service/definer only): `_shares_live_community(a, b, cid?)`,
+  `_connected_ids(uid)`. Mentorship handler validates topic (400
+  `error.fields.topic`), calls `request_mentorship`, pushes to the recipient.
+  Follow = `follow_user`; unfollow = RLS delete on `follows` (204 always).
+  Follow ships enabled server-side (DEC-010 flag is client-side).
+  Tests: `people_test.go` (`setProfile`, `connect`, `hasID`), pgTAP `people.test.sql`.
 - `internal/push` — `Sender` interface (`Send(ctx, Notification{UserIDs, Title, Body,
   Data})`); `push.Log` is the default until APNs/FCM and device-token storage
   exist. `Deps.Push`; sends run in a goroutine after commit.
