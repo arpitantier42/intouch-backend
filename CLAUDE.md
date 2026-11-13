@@ -54,6 +54,29 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   Field errors: 400 body `error.fields` {field: message}, `error.message` = first.
   Device fingerprint = `X-Device-Id` header, else User-Agent (hashed).
   Endpoint tests: `auth_otp_test.go` (`fakeAuth`, `newOTPEnv`, `age()` to backdate attempts).
+- `internal/server/auth_sessions.go` — OP-004/005/006/011 (`registerAuthSessions`).
+  Sign-in: `checkPassword` runs `auth_password_begin` + Auth password grant in ONE
+  service tx (wrong password commits the failure → 401 generic; success marks the
+  attempt → count resets; Auth 5xx rolls back → 502; PT423 → 423). Then
+  `ensure_profile`, `sign_in_settings`; 2FA on → revoke the password session (Auth
+  logout local + `revoke_session`), SMS via `throttledSend`, 202 with `identifier`
+  (client finishes with verifyOtp purpose=two_factor); else `record_sign_in` and,
+  when `alerted`, `Deps.Mailer` email in a goroutine. setPassword: policy 400 →
+  current password via `checkPassword` (skipped when the JWT `amr` has `recovery`,
+  `Claims.HasAMR`) → `UpdatePassword` → `revoke(..., "others")`. Sign-out:
+  `revoke()` = Auth logout first (5xx → 502, 4xx ignored), then the DB.
+  Tests: `auth_sessions_test.go` (`newSessEnv`, `fakeMailer`, fake `token()`).
+- **Session revocation** (migration `..._session_revocation.sql`): `RequireUser`
+  calls `Verifier.Revoked` (wired by `server.New` to `session_revoked(user,
+  session, iat)` when `Deps.DB` is set; DB error → 503). `revoke_session(user, sid)`
+  (local) and `revoke_other_sessions(user, keep_sid)` (rejects tokens with
+  iat < now() except the kept session; forgets other devices). Any later
+  feature that must kill sessions (account deletion) should call these.
+  Tables `revoked_sessions`, `session_revocations` have no client grants.
+- `internal/mailer` — `Mailer` interface (`Send(ctx, Message)`); `mailer.Log` is the
+  default until a provider is wired (logs domain + subject only). `Deps.Mailer`.
+- `internal/gotrue` also has `SignInPassword`, `UpdatePassword(token, pw)`,
+  `Logout(token, scope)`; fakes must implement them.
 - `internal/dbtest` — DB test harness + schema/policy tests (`dbtest.New(t)`,
   `d.NewUser`, `d.As(uid, fn)` runs as role `authenticated` with that JWT sub,
   `uid==""` runs as `anon`; `SQLState(err)`).

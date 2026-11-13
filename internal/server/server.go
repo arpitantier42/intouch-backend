@@ -10,6 +10,7 @@ import (
 	"github.com/intouch/api/internal/config"
 	"github.com/intouch/api/internal/db"
 	"github.com/intouch/api/internal/gotrue"
+	"github.com/intouch/api/internal/mailer"
 )
 
 // Deps are the shared dependencies handlers use. DB may be nil in unit tests.
@@ -20,6 +21,8 @@ type Deps struct {
 	// Auth is the Supabase Auth client; when nil and SUPABASE_URL is set,
 	// New builds the HTTP client from the config.
 	Auth gotrue.Client
+	// Mailer sends transactional email; nil means mailer.Log.
+	Mailer mailer.Mailer
 }
 
 // Groups are the route groups endpoint tickets register into:
@@ -43,6 +46,12 @@ func New(deps ...Deps) *gin.Engine {
 	}
 	if d.Verifier == nil {
 		d.Verifier = auth.NewVerifier(d.Config.JWTSecret)
+	}
+	if d.Mailer == nil {
+		d.Mailer = mailer.Log{}
+	}
+	if d.DB != nil && d.Verifier.Revoked == nil {
+		d.Verifier.Revoked = sessionRevoked(d.DB)
 	}
 	if d.Auth == nil && d.Config.SupabaseURL != "" {
 		d.Auth = gotrue.New(d.Config.SupabaseURL, d.Config.SupabaseAnonKey)
@@ -71,4 +80,5 @@ func New(deps ...Deps) *gin.Engine {
 // g.User.POST("/communities", h.createCommunity).
 func register(g Groups, d Deps) {
 	registerAuthOTP(g, d)
+	registerAuthSessions(g, d)
 }

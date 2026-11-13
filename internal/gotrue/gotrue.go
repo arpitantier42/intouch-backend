@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -28,6 +29,14 @@ type Client interface {
 	// Verify checks a code. typ is signup|recovery|sms; identifier is the
 	// email (signup, recovery) or E.164 phone (sms).
 	Verify(ctx context.Context, typ, identifier, code string) (*Session, error)
+	// SignInPassword checks email + password (grant_type=password) and
+	// issues a session.
+	SignInPassword(ctx context.Context, email, password string) (*Session, error)
+	// UpdatePassword sets a new password for the user of accessToken.
+	UpdatePassword(ctx context.Context, accessToken, password string) error
+	// Logout revokes refresh tokens of the session of accessToken:
+	// scope local (this session), others (every other session) or global.
+	Logout(ctx context.Context, accessToken, scope string) error
 }
 
 // User is the part of an Auth user the API reads.
@@ -81,17 +90,26 @@ func New(baseURL, anonKey string) *HTTP {
 }
 
 func (h *HTTP) post(ctx context.Context, path string, body any, out any) error {
-	b, err := json.Marshal(body)
-	if err != nil {
-		return err
+	return h.do(ctx, http.MethodPost, path, h.APIKey, body, out)
+}
+
+// do sends a JSON request; bearer is the anon key or a user's access token.
+func (h *HTTP) do(ctx context.Context, method, path, bearer string, body any, out any) error {
+	var rd io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		rd = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.BaseURL+"/auth/v1"+path, bytes.NewReader(b))
+	req, err := http.NewRequestWithContext(ctx, method, h.BaseURL+"/auth/v1"+path, rd)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("apikey", h.APIKey)
-	req.Header.Set("Authorization", "Bearer "+h.APIKey)
+	req.Header.Set("Authorization", "Bearer "+bearer)
 	res, err := h.Client.Do(req)
 	if err != nil {
 		return &Error{Status: 0, Message: err.Error()}
@@ -154,4 +172,23 @@ func (h *HTTP) Verify(ctx context.Context, typ, identifier, code string) (*Sessi
 		return nil, err
 	}
 	return &s, nil
+}
+
+// SignInPassword implements Client.
+func (h *HTTP) SignInPassword(ctx context.Context, email, password string) (*Session, error) {
+	var s Session
+	if err := h.post(ctx, "/token?grant_type=password", map[string]any{"email": email, "password": password}, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// UpdatePassword implements Client.
+func (h *HTTP) UpdatePassword(ctx context.Context, accessToken, password string) error {
+	return h.do(ctx, http.MethodPut, "/user", accessToken, map[string]any{"password": password}, nil)
+}
+
+// Logout implements Client.
+func (h *HTTP) Logout(ctx context.Context, accessToken, scope string) error {
+	return h.do(ctx, http.MethodPost, "/logout?scope="+url.QueryEscape(scope), accessToken, nil, nil)
 }

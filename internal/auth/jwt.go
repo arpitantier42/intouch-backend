@@ -2,6 +2,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -22,6 +23,11 @@ type Claims struct {
 	Phone     string `json:"phone"`
 	ExpiresAt int64  `json:"exp"`
 	IssuedAt  int64  `json:"iat"`
+	// AMR lists how the session authenticated, e.g. [{"method":"recovery"}].
+	AMR []struct {
+		Method    string `json:"method"`
+		Timestamp int64  `json:"timestamp"`
+	} `json:"amr"`
 
 	// Raw is the decoded payload, forwarded to Postgres as request.jwt.claims.
 	Raw json.RawMessage `json:"-"`
@@ -39,6 +45,11 @@ var (
 type Verifier struct {
 	secret []byte
 	now    func() time.Time
+
+	// Revoked, when set, is asked by RequireUser whether a verified token's
+	// session was signed out (the server wires it to the session_revoked
+	// SQL function). Verify itself never calls it.
+	Revoked func(ctx context.Context, c *Claims) (bool, error)
 }
 
 // NewVerifier returns a verifier for the given secret.
@@ -122,4 +133,15 @@ func KeyEqual(expected, got string) bool {
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(expected), []byte(got)) == 1
+}
+
+// HasAMR reports whether the session authenticated with method (e.g.
+// "recovery" for a session issued by a password-recovery code).
+func (c *Claims) HasAMR(method string) bool {
+	for _, a := range c.AMR {
+		if a.Method == method {
+			return true
+		}
+	}
+	return false
 }

@@ -61,6 +61,27 @@ This repository holds:
     returns the profile, which is created on the first verification with
     `onboarding_complete: false`, plus a `session` object (access and refresh
     token). It also records the device;
+- password sign-in and session management:
+  - `POST /auth/sign-in?email=...` with `{"password": "..."}` in the body.
+    A wrong password and an unknown email get the same 401 "Incorrect email
+    or password.". After 10 failures in a row within 15 minutes the account
+    is locked (423) for 15 minutes; a successful sign-in resets the count.
+    Without two-factor sign-in the answer is 200 with the profile and a
+    `session`. With it, the answer is 202 (`two_factor_required`, the phone
+    `identifier`) and an SMS code is sent, which the app confirms with
+    `POST /auth/otp/verify?purpose=two_factor`. Signing in from a device the
+    account has not used before stores a `login_alert` notification and
+    emails an alert when the user has login alerts on.
+  - `POST /auth/password` with `{"current_password", "new_password"}` (a
+    session issued by a password-recovery code does not need the current
+    password). The new password needs 8–72 characters with upper- and
+    lower-case letters and a digit (400 otherwise); a wrong current password
+    gets 401. On success (204) every other session is signed out.
+  - `POST /auth/sign-out?scope=local|others` signs out this session or every
+    other one (204). Signed-out access tokens are rejected by the API at
+    once (401), not only when they expire.
+  - `GET /me/devices` lists the devices the user is signed in on, with
+    `current: true` on the caller's;
 - a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides
@@ -95,7 +116,11 @@ Environment variables (see `.env.example`):
 
 Copy `.env.example` to `.env` and fill it in; secrets are never logged.
 The `/auth/*` endpoints need `DATABASE_URL`, `SUPABASE_URL` and
-`SUPABASE_ANON_KEY`; without them they answer 503.
+`SUPABASE_ANON_KEY`; without them they answer 503. No email provider is
+wired in yet: new-device alert emails are only logged (recipient domain and
+subject), while the in-app `login_alert` notification is always stored.
+With a database configured, every signed-in request also checks that its
+session has not been signed out.
 
 Supabase Auth setup for the code flows (`supabase/config.toml` holds the
 local equivalents):

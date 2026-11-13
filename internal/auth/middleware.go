@@ -26,6 +26,18 @@ func RequireUser(v *Verifier) gin.HandlerFunc {
 			apierr.Abort(c, http.StatusUnauthorized, "Session missing or expired")
 			return
 		}
+		if v.Revoked != nil {
+			revoked, err := v.Revoked(c.Request.Context(), claims)
+			if err != nil {
+				apierr.Abort(c, http.StatusServiceUnavailable, "Sign-in is temporarily unavailable. Try again.")
+				return
+			}
+			if revoked {
+				c.Header("WWW-Authenticate", `Bearer realm="intouch", error="invalid_token"`)
+				apierr.Abort(c, http.StatusUnauthorized, "Session missing or expired")
+				return
+			}
+		}
 		c.Set(claimsKey, claims)
 		c.Next()
 	}

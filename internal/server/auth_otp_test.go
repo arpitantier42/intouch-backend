@@ -30,10 +30,14 @@ type fakeAuth struct {
 	users map[string]string // email/phone → auth user id
 	meta  map[string]string // user id → full_name
 	sends []string          // identifiers a code was sent to
+
+	passwords map[string]string // email → password (password sign-in)
+	logouts   []string          // scopes of Logout calls
+	nsess     int               // sessions issued by SignInPassword
 }
 
 func newFake(td *dbtest.DB) *fakeAuth {
-	return &fakeAuth{td: td, code: "482913", users: map[string]string{}, meta: map[string]string{}}
+	return &fakeAuth{td: td, code: "482913", users: map[string]string{}, meta: map[string]string{}, passwords: map[string]string{}}
 }
 
 func (f *fakeAuth) addUser(t *testing.T, ident, name string) string {
