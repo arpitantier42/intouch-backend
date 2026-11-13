@@ -36,7 +36,24 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   rlscheck on the deployed DB → docker build → `DEPLOY_COMMAND`); `DRY_RUN=1` is local-only.
   `Dockerfile` builds `api` + `rlscheck` (distroless). CI (`.github/workflows`) is not in
   the repo: a person adds a job that runs `make deploy-dry-run` with a Postgres service.
-- `internal/profile` — profile field validation mirroring the DB CHECKs.
+- `internal/profile` — profile field validation mirroring the DB CHECKs; `signup.go`:
+  `SignUp.Validate()` (field → client message), `ValidateEmail`, `PasswordLength`,
+  `ValidateNewPassword` (8–72 + upper/lower/digit — use it for setPassword, OP-005).
+- `internal/gotrue` — Supabase Auth REST client behind interface `gotrue.Client`
+  (SignUp, Resend, Recover, SendSMS, Verify); `gotrue.StatusOf(err)` = Auth HTTP status
+  (0 = transport). `server.Deps.Auth` takes a fake in tests; `server.New` builds
+  `gotrue.New(SUPABASE_URL, SUPABASE_ANON_KEY)` when nil and the URL is set.
+- `internal/server/auth_otp.go` — OP-001..003 (`registerAuthOTP`). Patterns to reuse
+  (sign-in, password): sends run `auth_otp_send` and the Auth call in ONE service tx
+  (`throttledSend`) so a failed send rolls back the cooldown; verify commits
+  `auth_otp_verify_begin` first (counts even wrong codes), then Auth verify, then
+  `auth_attempt_succeeded` + `ensure_profile` + `record_sign_in` (session id from the
+  issued token's `session_id` claim via `Deps.Verifier`). Auth 4xx on send = swallowed
+  (identical response), 429 → 429, else 502; Auth 4xx on verify → 401
+  'Invalid code. Try again.'. Verify 200 = Profile JSON + `session` object.
+  Field errors: 400 body `error.fields` {field: message}, `error.message` = first.
+  Device fingerprint = `X-Device-Id` header, else User-Agent (hashed).
+  Endpoint tests: `auth_otp_test.go` (`fakeAuth`, `newOTPEnv`, `age()` to backdate attempts).
 - `internal/dbtest` — DB test harness + schema/policy tests (`dbtest.New(t)`,
   `d.NewUser`, `d.As(uid, fn)` runs as role `authenticated` with that JWT sub,
   `uid==""` runs as `anon`; `SQLState(err)`).
@@ -118,6 +135,15 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
 - `switcher_communities()` (authenticated): joined, live communities with role —
   pending requests excluded.
 - Test helper in `internal/dbtest`: `service[T](d, sql, args...)` runs as service_role.
+- `ensure_profile(user, full_name)` (migration `..._otp_auth.sql`, service_role only):
+  creates the profile on first OTP verification (idempotent; invalid name →
+  'New member'; PT404 unknown auth user), returns the `profiles` row.
+- The pgTAP shim grants execute only on its own functions (it used to grant every
+  public function to PUBLIC, which masked execute revokes) — `throws_ok(..., '42501')`
+  on a revoked RPC now works in pgTAP files.
+- Supabase Auth settings the wrappers rely on are in `supabase/config.toml` `[auth*]`
+  (OTP length 6, expiry 600 s, 30 s frequency, phone sign-up off, rate limits as
+  backstop). Email templates must render `{{ .Token }}`.
 
 ## Social graph (migration `..._social_graph.sql`)
 - Tables `blocks`, `connections`, `follows`, `mentorship_requests`; all FKs to

@@ -3,3 +3,28 @@ project_id = "intouch"
 
 [db]
 major_version = 17
+
+# Auth settings the OTP wrapper relies on. The API enforces the 30 s resend,
+# 5 verifies per OTP and 10-minute expiry itself; these keep Supabase Auth
+# consistent with that and act as a backstop for clients that call Auth
+# directly with the anon key.
+[auth]
+enabled = true
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+otp_length = 6
+otp_expiry = 600
+max_frequency = "30s"
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = true
+max_frequency = "30s"
+
+[auth.rate_limit]
+email_sent = 30
+sms_sent = 30
+token_verifications = 30

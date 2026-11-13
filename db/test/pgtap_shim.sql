@@ -63,4 +63,18 @@ end $$;
 create or replace function public.finish() returns setof text
 language sql as $$ select null::text where false $$;
 
-grant execute on all functions in schema public to public;
+-- Only the shim's own functions: a blanket grant on the schema would undo
+-- the migrations' execute revokes and hide privilege bugs.
+do $$
+declare
+  f regprocedure;
+begin
+  for f in
+    select p.oid::regprocedure from pg_proc p
+    where p.pronamespace = 'public'::regnamespace
+      and p.proname in ('plan', 'ok', 'is', 'results_eq', 'throws_ok', 'lives_ok', 'finish')
+  loop
+    execute format('grant execute on function %s to public', f);
+  end loop;
+end
+$$;

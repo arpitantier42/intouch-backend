@@ -45,8 +45,23 @@ This repository holds:
   community admins can read (members see the last 4 account digits), and
   contributions recorded once per gateway payment, so a repeated payment
   webhook never counts twice;
-- a Go HTTP service, currently serving a health check, with the shared
-  plumbing every endpoint uses: Supabase access-token validation (requests
+- account creation with one-time codes, in front of Supabase Auth:
+  - `POST /auth/sign-up` checks the form (name 2–80 characters, email up to
+    255, password 8–72, matching confirmation) and has Supabase Auth email a
+    6-digit code. An email that cannot be registered gets a generic 422 that
+    says nothing about the account. A failed email send returns 502, and
+    the 30-second resend wait does not start, so the app can offer a retry.
+  - `POST /auth/otp?purpose=signup|recovery|phone|two_factor&identifier=...`
+    sends or resends a code by email, or by SMS to a 10-digit Indian mobile
+    number. It answers 429 within 30 seconds of the previous send, and gives
+    the same answer whether or not the account exists.
+  - `POST /auth/otp/verify?purpose=...&identifier=...&code=123456` checks the
+    code. A wrong code gets 401 "Invalid code. Try again.", a code older than
+    10 minutes gets 410, and the 6th try on one code gets 429. A correct code
+    returns the profile, which is created on the first verification with
+    `onboarding_complete: false`, plus a `session` object (access and refresh
+    token). It also records the device;
+- a Go HTTP service with the shared plumbing every endpoint uses: Supabase access-token validation (requests
   without a valid session get 401), an API-key guard for webhooks, queries
   that run as the signed-in user so the database's row level security decides
   what they may read or change, and one JSON error format;
@@ -79,6 +94,19 @@ Environment variables (see `.env.example`):
 | `SUPABASE_PROJECT_REF`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `DEPLOY_COMMAND` | deploy | target project and the command that rolls out the built image (`$IMAGE`) |
 
 Copy `.env.example` to `.env` and fill it in; secrets are never logged.
+The `/auth/*` endpoints need `DATABASE_URL`, `SUPABASE_URL` and
+`SUPABASE_ANON_KEY`; without them they answer 503.
+
+Supabase Auth setup for the code flows (`supabase/config.toml` holds the
+local equivalents):
+
+- Email confirmations on, OTP length 6, OTP expiry 600 s. The "Confirm
+  signup" and "Reset password" email templates must show `{{ .Token }}`
+  (the 6-digit code), not a link.
+- Configure an SMS provider for phone codes. Phone sign-up stays off, so a
+  phone code only signs in an existing account.
+- Keep Auth's own rate limits on. They are a backstop for clients that call
+  Supabase Auth directly instead of going through this API.
 
 ## Install
 
@@ -96,6 +124,8 @@ The API listens on http://localhost:8080 (`PORT` changes it):
 
 ```sh
 curl http://localhost:8080/healthz
+curl -X POST http://localhost:8080/auth/sign-up \
+  -d '{"full_name":"Asha Rao","email":"asha@example.com","password":"Secret123","confirm_password":"Secret123"}'
 ```
 
 ## Database
