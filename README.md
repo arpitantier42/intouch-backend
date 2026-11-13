@@ -162,6 +162,15 @@ This repository holds:
     The storage buckets enforce the same limits, so an upload that skips this
     check is still refused. Without `SUPABASE_URL` and
     `SUPABASE_SERVICE_ROLE_KEY` the endpoint answers 503;
+  - GIF search: `GET /gifs?q=&limit=&offset=` (bearer) searches GIPHY with
+    the server's `GIF_API_KEY` (never sent to the app), rating `pg`, and
+    returns `{query, results: [{id, title, url, preview_url, width, height}],
+    next_offset, attribution}` (`limit` 1–50, default 24; `next_offset` is
+    null on the last page). Send a picked GIF as a chat message with
+    `kind: "gif"` and its `url` as `attachment_url`. A blank or >50-character
+    `q` is 400. When the key is unset or GIPHY fails or times out (5 s) the
+    answer is 503 "GIF search is unavailable right now. You can still send
+    text." — message sending never depends on it;
   - chat conversations (bearer; all scoped to one community):
     - `GET /communities/{id}/threads?filter=all|unread|groups|calls&q=` lists
       the caller's conversations in that community only, most recent first,

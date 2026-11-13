@@ -169,6 +169,14 @@ parties. The OpenAPI contract in the tickets is frozen — implement it exactly.
   `scope_community_id` (also `Scope-Community-Id`). Tests: `messages_test.go`
   (`newMsgEnv`, `send`, `fakePush`), load check `messages_load_test.go`
   (skipped with `-short`), pgTAP `messaging.test.sql`.
+- `internal/server/gifs.go` — OP-058 `GET /gifs?q&limit&offset` (`registerGifs`, no DB).
+  `internal/gifs`: `Searcher` interface, `Giphy` HTTP impl (5 s timeout, rating `pg`,
+  errors never include the key-bearing URL; `*gifs.Error` = provider status).
+  `server.New` builds it when `GIF_API_KEY` is set; `Deps.Gifs` takes `fakeGifs` in tests.
+  400 blank/>50-char q, limit ∉ 1..50, offset ∉ 0..4999 (provider not called);
+  nil searcher or any provider error → 503 `gifUnavailable`. 200 body
+  `{query, results[{id,title,url,preview_url,width,height}], next_offset|null, attribution}`.
+  The send path never touches the provider (`TestTextSendingSurvivesGifOutage`).
 - `internal/push` — `Sender` interface (`Send(ctx, Notification{UserIDs, Title, Body,
   Data})`); `push.Log` is the default until APNs/FCM and device-token storage
   exist. `Deps.Push`; sends run in a goroutine after commit.

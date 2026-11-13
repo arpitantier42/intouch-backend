@@ -9,6 +9,7 @@ import (
 	"github.com/intouch/api/internal/auth"
 	"github.com/intouch/api/internal/config"
 	"github.com/intouch/api/internal/db"
+	"github.com/intouch/api/internal/gifs"
 	"github.com/intouch/api/internal/gotrue"
 	"github.com/intouch/api/internal/mailer"
 	"github.com/intouch/api/internal/push"
@@ -31,6 +32,9 @@ type Deps struct {
 	Storage storage.Signer
 	// Push sends APNs/FCM alerts; nil means push.Log.
 	Push push.Sender
+	// Gifs searches the GIF provider; when nil and GIF_API_KEY is set, New
+	// builds the GIPHY client. Still nil → GET /gifs answers 503.
+	Gifs gifs.Searcher
 }
 
 // Groups are the route groups endpoint tickets register into:
@@ -72,6 +76,10 @@ func New(deps ...Deps) *gin.Engine {
 		d.Storage = storage.New(d.Config.SupabaseURL, d.Config.SupabaseServiceKey)
 	}
 
+	if d.Gifs == nil && d.Config.GIFAPIKey != "" {
+		d.Gifs = gifs.New(d.Config.GIFAPIKey)
+	}
+
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.NoRoute(func(c *gin.Context) { apierr.Abort(c, http.StatusNotFound, "Not found") })
@@ -102,4 +110,5 @@ func register(g Groups, d Deps) {
 	registerUploads(g, d)
 	registerThreads(g, d)
 	registerMessages(g, d)
+	registerGifs(g, d)
 }
