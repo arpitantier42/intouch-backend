@@ -1,0 +1,12 @@
+/bin/
+/dist/
+/build/
+*.test
+*.out
+coverage*
+.env
+.env.*
+!.env.example
+supabase/.branches/
+supabase/.temp/
+.DS_Store

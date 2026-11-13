@@ -1,0 +1,5 @@
+# Supabase CLI project settings (supabase start / supabase db reset / supabase test db).
+project_id = "intouch"
+
+[db]
+major_version = 17
